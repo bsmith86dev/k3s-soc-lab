@@ -29,7 +29,7 @@
 
   pre_tasks:
     - name: Verify pfSense is reachable
-      uri:
+      ansible.builtin.uri:
         url: "https://10.0.10.1"
         validate_certs: no
         status_code: [200, 301, 302]
@@ -37,7 +37,7 @@
       failed_when: false
 
     - name: Abort if pfSense unreachable
-      fail:
+      ansible.builtin.fail:
         msg: "pfSense at 10.0.10.1 is not reachable. Check network connectivity."
       when: pfsense_check.status is not defined or pfsense_check.status == -1
 

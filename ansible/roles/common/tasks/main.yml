@@ -7,33 +7,33 @@
 # Run order matters — do not reorder imports
 
 - name: Configure system settings
-  import_tasks: system.yml
+  ansible.builtin.import_tasks: system.yml
   tags: [common, system]
 
 - name: Install baseline packages
-  import_tasks: packages.yml
+  ansible.builtin.import_tasks: packages.yml
   tags: [common, packages]
 
 - name: Configure SSH hardening
-  import_tasks: ssh.yml
+  ansible.builtin.import_tasks: ssh.yml
   tags: [common, ssh]
 
 - name: Configure UFW firewall
-  import_tasks: ufw.yml
+  ansible.builtin.import_tasks: ufw.yml
   tags: [common, ufw]
 
 - name: Configure fail2ban
-  import_tasks: fail2ban.yml
+  ansible.builtin.import_tasks: fail2ban.yml
   tags: [common, fail2ban]
 
 - name: Configure unattended upgrades
-  import_tasks: upgrades.yml
+  ansible.builtin.import_tasks: upgrades.yml
   tags: [common, upgrades]
 
 - name: Configure NTP / time sync
-  import_tasks: ntp.yml
+  ansible.builtin.import_tasks: ntp.yml
   tags: [common, ntp]
 
 - name: Configure system logging
-  import_tasks: logging.yml
+  ansible.builtin.import_tasks: logging.yml
   tags: [common, logging]

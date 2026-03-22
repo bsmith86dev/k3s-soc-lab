@@ -5,13 +5,13 @@
 # Provides an offline-capable, self-hosted git server
 
 - name: Install Gitea prerequisites
-  import_tasks: install.yml
+  ansible.builtin.import_tasks: install.yml
   tags: [gitea, install]
 
 - name: Configure Gitea
-  import_tasks: configure.yml
+  ansible.builtin.import_tasks: configure.yml
   tags: [gitea, configure]
 
 - name: Configure GitHub mirror
-  import_tasks: mirror.yml
+  ansible.builtin.import_tasks: mirror.yml
   tags: [gitea, mirror]

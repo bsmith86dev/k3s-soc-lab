@@ -1,0 +1,23 @@
+---
+# .ansible-lint — ansible-lint configuration for blerdmh-lab
+# See: https://ansible-lint.readthedocs.io/configuring/
+
+profile: moderate
+
+skip_list:
+  # Cross-role variables (wazuh_manager_ip in common role, skynet_mac in pfsense, etc.)
+  # Renaming all would break variable references across group_vars and host_vars
+  - var-naming[no-role-prefix]
+
+warn_list:
+  # Shell/command tasks that are intentionally always-change or idempotent via other means
+  - no-changed-when
+  # File mode omitted on some copy tasks — address progressively
+  - risky-file-permissions
+  # Some tasks run on-change but don't fit cleanly into handlers (operational one-shots)
+  - no-handler
+
+exclude_paths:
+  - ansible/inventory/group_vars/all/vault.yml
+  - .git/
+  - site/

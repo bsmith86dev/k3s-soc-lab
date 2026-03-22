@@ -21,8 +21,8 @@ metallb_ip_range: "10.0.20.200-10.0.20.250"
 k3s_api_extra_sans: ""
 
 # ── Tailscale ─────────────────────────────────────────────────────────────
-k3s_tailscale_subnet_router: false    # Only true for Pi 4 (k3s-cp)
-                                      # Set true in host_vars/k3s-cp/main.yml
+# Only true for Pi 4 (k3s-cp) — set true in host_vars/k3s-cp/main.yml
+k3s_tailscale_subnet_router: false
 
 k3s_tailscale_advertised_routes:
   - "10.0.10.0/24"    # MGMT

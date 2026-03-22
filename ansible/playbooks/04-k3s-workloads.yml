@@ -107,12 +107,12 @@
         KUBECONFIG: "{{ kubeconfig }}"
       delegate_to: localhost
       loop:
-        - { name: grafana,          namespace: monitoring }
-        - { name: prometheus,       namespace: monitoring }
-        - { name: nextcloud,        namespace: personal }
-        - { name: homeassistant,    namespace: homeauto }
-        - { name: jellyfin,         namespace: media }
-      ignore_errors: yes
+        - { name: grafana, namespace: monitoring }
+        - { name: prometheus, namespace: monitoring }
+        - { name: nextcloud, namespace: personal }
+        - { name: homeassistant, namespace: homeauto }
+        - { name: jellyfin, namespace: media }
+      failed_when: false
       tags: [workloads, verify]
 
     - name: Show all pods across all namespaces

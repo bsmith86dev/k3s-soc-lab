@@ -10,16 +10,16 @@
 #   - OpenVAS / Greenbone Vulnerability Manager — scheduled scanning
 
 - name: Install and configure Suricata
-  import_tasks: suricata.yml
+  ansible.builtin.import_tasks: suricata.yml
   tags: [security, suricata, ids]
   when: "'ids' in group_names or inventory_hostname == 'ids-vm'"
 
 - name: Install and configure Zeek
-  import_tasks: zeek.yml
+  ansible.builtin.import_tasks: zeek.yml
   tags: [security, zeek, nsm]
   when: "'ids' in group_names or inventory_hostname == 'ids-vm'"
 
 - name: Install and configure OpenVAS
-  import_tasks: openvas.yml
+  ansible.builtin.import_tasks: openvas.yml
   tags: [security, openvas, vuln-scan]
   when: inventory_hostname == 'openvas-vm'

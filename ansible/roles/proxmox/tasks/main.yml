@@ -12,49 +12,49 @@
 # Each task file is independently taggable for surgical re-runs
 
 - name: Configure package repositories
-  import_tasks: repos.yml
+  ansible.builtin.import_tasks: repos.yml
   tags: [proxmox, repos]
 
 - name: Install required packages
-  import_tasks: packages.yml
+  ansible.builtin.import_tasks: packages.yml
   tags: [proxmox, packages]
 
 - name: Configure network bridges
-  import_tasks: network.yml
+  ansible.builtin.import_tasks: network.yml
   tags: [proxmox, network]
 
 - name: Configure IOMMU / PCIe passthrough
-  import_tasks: iommu.yml
+  ansible.builtin.import_tasks: iommu.yml
   tags: [proxmox, iommu]
   when: proxmox_enable_iommu | bool
 
 - name: Configure local ZFS storage
-  import_tasks: zfs.yml
+  ansible.builtin.import_tasks: zfs.yml
   tags: [proxmox, zfs]
   when: proxmox_configure_zfs | bool
 
 - name: Add NFS storage backend (TrueNAS)
-  import_tasks: storage-nfs.yml
+  ansible.builtin.import_tasks: storage-nfs.yml
   tags: [proxmox, storage, nfs]
 
 - name: Add Proxmox Backup Server storage backend
-  import_tasks: storage-pbs.yml
+  ansible.builtin.import_tasks: storage-pbs.yml
   tags: [proxmox, storage, pbs]
 
 - name: Configure datacenter options
-  import_tasks: datacenter.yml
+  ansible.builtin.import_tasks: datacenter.yml
   tags: [proxmox, datacenter]
 
 - name: Harden Proxmox node
-  import_tasks: hardening.yml
+  ansible.builtin.import_tasks: hardening.yml
   tags: [proxmox, hardening]
 
 - name: Provision LXC containers
-  import_tasks: lxc.yml
+  ansible.builtin.import_tasks: lxc.yml
   tags: [proxmox, lxc]
   when: proxmox_provision_lxc | bool
 
 - name: Provision virtual machines
-  import_tasks: vms.yml
+  ansible.builtin.import_tasks: vms.yml
   tags: [proxmox, vms]
   when: proxmox_provision_vms | bool

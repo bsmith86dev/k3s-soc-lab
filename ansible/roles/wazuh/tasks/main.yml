@@ -14,21 +14,21 @@
 #   --tags wazuh,rules     — push custom detection rules only
 
 - name: Install Wazuh manager
-  import_tasks: manager.yml
+  ansible.builtin.import_tasks: manager.yml
   tags: [wazuh, manager]
   when: inventory_hostname == wazuh_manager_host
 
 - name: Deploy Wazuh agents to all lab hosts
-  import_tasks: agents.yml
+  ansible.builtin.import_tasks: agents.yml
   tags: [wazuh, agents]
   when: inventory_hostname != wazuh_manager_host
 
 - name: Deploy custom detection rules
-  import_tasks: rules.yml
+  ansible.builtin.import_tasks: rules.yml
   tags: [wazuh, rules]
   when: inventory_hostname == wazuh_manager_host
 
 - name: Configure Wazuh active response
-  import_tasks: active-response.yml
+  ansible.builtin.import_tasks: active-response.yml
   tags: [wazuh, active-response]
   when: inventory_hostname == wazuh_manager_host
