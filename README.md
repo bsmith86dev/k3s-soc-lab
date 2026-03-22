@@ -74,16 +74,12 @@ blerdmh-lab/
 ├── switch/               # pfSense + MokerLink config docs
 └── docs/                 # MkDocs source
 ```
-
 ## Architecture Overview
 
 ```mermaid
 flowchart TB
 
-%% =========================
-%% USER / INTERNET LAYER
-%% =========================
-User[User / Internet]
+User[User Internet]
 
 Cloudflare[Cloudflare Tunnel]
 Tailscale[Tailscale VPN]
@@ -91,57 +87,48 @@ Tailscale[Tailscale VPN]
 User --> Cloudflare
 User --> Tailscale
 
-%% =========================
-%% EDGE NETWORK
-%% =========================
 Cloudflare --> pfSense
 Tailscale --> pfSense
 
-pfSense[pfSense Firewall / Router]
+pfSense[pfSense Firewall Router]
 
-%% =========================
-%% VLAN SEGMENTS
-%% =========================
-subgraph VLAN10["VLAN 10 - MGMT"]
-    MGMT[Proxmox UI / Admin Access]
+subgraph VLAN10 [VLAN 10 MGMT]
+    MGMT[Proxmox UI Admin]
 end
 
-subgraph VLAN20["VLAN 20 - SERVERS"]
-    K3SCP[k3s Control Plane (Pi4)]
-    K3SW1[k3s Worker (Pi5)]
-    NAS[TrueNAS Scale]
+subgraph VLAN20 [VLAN 20 SERVERS]
+    K3SCP[k3s Control Plane Pi4]
+    K3SW1[k3s Worker Pi5]
+    NAS[TrueNAS Storage]
 end
 
-subgraph VLAN40["VLAN 40 - SECURITY"]
+subgraph VLAN40 [VLAN 40 SECURITY]
     Wazuh[Wazuh SIEM]
     Suricata[Suricata IDS]
     Zeek[Zeek NSM]
     OpenVAS[OpenVAS Scanner]
 end
 
-subgraph VLAN50["VLAN 50 - IOT / HONEYPOT"]
-    Honeypot[Honeypots / IoT Devices]
+subgraph VLAN50 [VLAN 50 IOT HONEYPOT]
+    Honeypot[IoT Honeypots]
 end
 
-subgraph VLAN60["VLAN 60 - PRODUCTION"]
-    Apps[Nextcloud / Jellyfin / Home Assistant / ARR Stack]
+subgraph VLAN60 [VLAN 60 PRODUCTION]
+    Apps[Nextcloud Jellyfin Home Assistant ARR]
 end
 
-subgraph VLAN61["VLAN 61 - RED TEAM"]
-    Attacker[Attack VM / Tools]
+subgraph VLAN61 [VLAN 61 RED TEAM]
+    Attacker[Attack VM]
 end
 
-subgraph VLAN62["VLAN 62 - PURPLE LAB"]
-    Purple[Attack + Detection Testing]
+subgraph VLAN62 [VLAN 62 PURPLE LAB]
+    Purple[Attack Detection Testing]
 end
 
-subgraph VLAN70["VLAN 70 - GUEST"]
+subgraph VLAN70 [VLAN 70 GUEST]
     Guest[Guest Network]
 end
 
-%% =========================
-%% INFRASTRUCTURE LAYER
-%% =========================
 pfSense --> VLAN10
 pfSense --> VLAN20
 pfSense --> VLAN40
@@ -151,75 +138,44 @@ pfSense --> VLAN61
 pfSense --> VLAN62
 pfSense --> VLAN70
 
-%% =========================
-%% PROXMOX CLUSTER
-%% =========================
-subgraph ProxmoxCluster["Proxmox Cluster"]
+subgraph ProxmoxCluster [Proxmox Cluster]
     AMDPVE[AMDPVE Node]
     N1Mini[N1 Mini Node]
 end
 
 VLAN10 --> ProxmoxCluster
 
-%% =========================
-%% K3S WORKLOAD FLOW
-%% =========================
 K3SCP --> K3SW1
 K3SW1 --> Apps
 
-%% =========================
-%% STORAGE
-%% =========================
 NAS --> Apps
 NAS --> ProxmoxCluster
 
-%% =========================
-%% SECURITY TELEMETRY FLOW
-%% =========================
 Suricata --> Wazuh
 Zeek --> Wazuh
 OpenVAS --> Wazuh
 Apps --> Wazuh
 ProxmoxCluster --> Wazuh
 
-%% =========================
-%% ATTACK SIMULATION
-%% =========================
-Attacker --> VLAN60
-Attacker --> VLAN40
-
-%% =========================
-%% MONITORING STACK
-%% =========================
-subgraph Monitoring["Monitoring Stack"]
-    Prometheus
-    Grafana
-    Loki
-end
-
-Apps --> Prometheus
-ProxmoxCluster --> Prometheus
-Wazuh --> Grafana
-Loki --> Grafana
-
+Attacker --> Apps
+Attacker --> Wazuh
+```
 ## Architecture (Simplified View)
-
 ```mermaid
 flowchart LR
 
 User --> Edge
 
-subgraph Edge["Secure Access Layer"]
-    CF[Cloudflare Tunnel]
-    TS[Tailscale VPN]
+subgraph Edge
+    CF[Cloudflare]
+    TS[Tailscale]
 end
 
 Edge --> Firewall
 
-subgraph Network["pfSense + VLAN Segmentation"]
-    Firewall[pfSense Firewall]
-
-    MGMT[Mgmt VLAN]
+subgraph Network
+    Firewall[pfSense]
+    MGMT[Management VLAN]
     PROD[Production VLAN]
     SEC[Security VLAN]
     RED[Red Team VLAN]
@@ -230,7 +186,7 @@ Firewall --> PROD
 Firewall --> SEC
 Firewall --> RED
 
-subgraph Compute["Compute Layer"]
+subgraph Compute
     Proxmox[Proxmox Cluster]
     K3S[k3s Cluster]
 end
@@ -238,61 +194,58 @@ end
 MGMT --> Proxmox
 PROD --> K3S
 
-subgraph Apps["Applications"]
-    Apps1[Nextcloud / Jellyfin / HA]
+subgraph Apps
+    Services[Nextcloud Jellyfin Home Assistant]
 end
 
-K3S --> Apps1
+K3S --> Services
 
-subgraph Security["Security Stack"]
+subgraph Security
     Wazuh
     Suricata
     Zeek
-    OpenVAS
 end
 
 SEC --> Security
 
-subgraph Observability["Monitoring"]
+subgraph Observability
     Grafana
     Prometheus
     Loki
 end
 
-Apps1 --> Observability
+Services --> Observability
 Security --> Observability
 Proxmox --> Observability
-
+```
 ## Attack & Detection Flow (Red vs Blue)
-
 ```mermaid
 flowchart LR
 
-Attacker[Red Team VM] --> Target[Target System (Prod VLAN)]
+Attacker[Red Team VM] --> Target[Target System]
 
 Target --> Logs[System Logs]
-Target --> NetworkTraffic[Network Traffic]
+Target --> Traffic[Network Traffic]
 
-NetworkTraffic --> Suricata[Suricata IDS]
-NetworkTraffic --> Zeek[Zeek NSM]
+Traffic --> Suricata[Suricata IDS]
+Traffic --> Zeek[Zeek NSM]
 
 Logs --> Wazuh
 Suricata --> Wazuh
 Zeek --> Wazuh
 
-Wazuh --> Alert[Alert Triggered]
+Wazuh --> Alert[Security Alert]
 
 Alert --> Response[Active Response]
-Response --> FirewallBlock[pfSense Block / Isolation]
+Response --> FirewallBlock[pfSense Block]
 
-Alert --> Analyst[SOC Analyst / Dashboard (Grafana)]
-
+Alert --> Analyst[Security Dashboard]
+```
 ## SOC Data Pipeline
-
 ```mermaid
 flowchart LR
 
-Endpoints[Servers / Apps / Nodes] --> Logs[Logs + Events]
+Endpoints[Servers Applications Nodes] --> Logs[Logs Events]
 
 Logs --> Agents[Wazuh Agents]
 
@@ -306,14 +259,14 @@ Zeek --> Manager
 
 Manager --> Indexer[OpenSearch Indexer]
 
-Indexer --> Dashboard[Wazuh Dashboard / Grafana]
+Indexer --> Dashboard[Wazuh Dashboard Grafana]
 
-Dashboard --> Analyst[SOC Analyst]
+Dashboard --> Analyst[Security Analyst]
 
 Manager --> Response[Active Response Engine]
 
-Response --> Firewall[pfSense Actions]
-
+Response --> Firewall[pfSense Enforcement]
+```
 ## Quickstart
 
 ```bash
