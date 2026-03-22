@@ -1,0 +1,20 @@
+---
+# ansible/inventory/host_vars/n1minipve/main.yml
+# Node-specific overrides for N1 Mini PVE
+# Hardware: Ryzen 7 5825U, 16GB DDR4
+
+proxmox_nic: "enp2s0"              # Verify with: ip link show
+proxmox_mgmt_ip: "10.0.10.21"
+
+# 16GB RAM — ARC limit 8GB
+proxmox_zfs_arc_max_bytes: 8589934592
+
+# No GPU on N1 Mini — IOMMU not needed
+proxmox_enable_iommu: false
+proxmox_vfio_pci_ids: ""
+
+# N1 Mini hosts Gitea and PBS LXC containers
+proxmox_provision_lxc: true
+
+# N1 Mini does not provision VMs — AMDPVE handles all VMs
+proxmox_provision_vms: false

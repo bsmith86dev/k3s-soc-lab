@@ -1,0 +1,35 @@
+---
+# ansible/playbooks/00-site.yml
+# Master playbook — runs all phases in the correct order
+# Use this for a full lab rebuild from scratch
+#
+# For targeted runs use individual playbooks with --tags
+# Example: ansible-playbook -i inventory/hosts.yml playbooks/02-k3s.yml --tags k3s,tailscale
+#
+# Prerequisites before running any playbook:
+#   1. Proxmox cluster formed manually (pvecm create / pvecm add)
+#   2. SSH keys deployed to all hosts (ssh-copy-id)
+#   3. DHCP reservations set in pfSense for all hosts
+#   4. vault.yml encrypted with ansible-vault
+#   5. pfsensible.core + community.general collections installed
+
+- name: Phase 1 — Baseline all Linux hosts
+  import_playbook: 01-baseline.yml
+
+- name: Phase 2 — Configure Proxmox nodes
+  import_playbook: 05-proxmox.yml
+
+- name: Phase 3 — Provision k3s cluster
+  import_playbook: 02-k3s.yml
+
+- name: Phase 4 — Deploy security stack
+  import_playbook: 03-security.yml
+
+- name: Phase 5 — Deploy k3s workloads
+  import_playbook: 04-k3s-workloads.yml
+
+- name: Phase 6 — Configure pfSense firewall
+  import_playbook: 06-pfsense.yml
+
+- name: Phase 7 — Deploy Gitea
+  import_playbook: 07-gitea.yml

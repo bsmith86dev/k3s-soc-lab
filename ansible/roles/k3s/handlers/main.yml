@@ -1,0 +1,26 @@
+---
+# ansible/roles/k3s/handlers/main.yml
+# Triggered by notify: in k3s tasks
+
+- name: Restart k3s server
+  ansible.builtin.service:
+    name: k3s
+    state: restarted
+  listen: "restart k3s server"
+
+- name: Restart k3s agent
+  ansible.builtin.service:
+    name: k3s-agent
+    state: restarted
+  listen: "restart k3s agent"
+
+- name: Restart tailscaled
+  ansible.builtin.service:
+    name: tailscaled
+    state: restarted
+  listen: "restart tailscaled"
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  listen: "reload systemd"

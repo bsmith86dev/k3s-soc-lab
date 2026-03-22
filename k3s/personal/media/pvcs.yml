@@ -1,0 +1,162 @@
+---
+# k3s/personal/media/pvcs.yml
+# All PersistentVolumeClaims for the media namespace
+# Backed by TrueNAS NFS exports via the NFS storage class
+#
+# Storage class: nfs-truenas (registered in Proxmox + k3s)
+# If your NFS StorageClass has a different name, update storageClassName below
+#
+# Shared volumes (multiple pods read/write):
+#   media-library-pvc    → /mnt/tank/media     → Jellyfin + ARR apps
+#   media-downloads-pvc  → /mnt/tank/arr        → SABnzbd + qBittorrent + ARR apps
+#
+# Per-app config volumes (single pod):
+#   All *-config-pvc volumes are small and use local-path provisioner
+#   Config is not precious — it's restored by re-running configuration
+#   Keep configs in local-path for speed; media/downloads on NFS
+
+# ── Shared NFS volumes ────────────────────────────────────────────────────
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-library-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 10Ti       # TrueNAS tank/media — actual limit is pool size
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-downloads-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 2Ti        # TrueNAS tank/arr downloads landing zone
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-incomplete-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 500Gi      # SABnzbd incomplete downloads
+
+# ── Per-app config volumes (local-path — fast, single-node) ───────────────
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sabnzbd-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qbittorrent-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prowlarr-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: radarr-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi        # Radarr DB grows with library size
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sonarr-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lidarr-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bazarr-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: huntarr-config-pvc
+  namespace: media
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi

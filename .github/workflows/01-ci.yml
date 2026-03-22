@@ -1,0 +1,110 @@
+---
+# .github/workflows/01-ci.yml
+# Continuous Integration — runs on every push and PR
+# Catches secrets, YAML lint errors, and Ansible issues before they hit main
+#
+# Jobs:
+#   1. secret-scan    — detect any accidentally committed secrets
+#   2. yaml-lint      — validate YAML syntax across entire repo
+#   3. ansible-lint   — enforce Ansible best practices
+#   4. k8s-validate   — validate Kubernetes manifests with kubeconform
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Job 1: Secret scanning ─────────────────────────────────────────────
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # Full history needed for detect-secrets baseline
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run detect-secrets
+        run: |
+          pip install detect-secrets
+          detect-secrets scan \
+            --exclude-files '.*-sealed\.yml' \
+            --exclude-files 'vault\.yml' \
+            --exclude-files '\.secrets\.baseline' \
+            --baseline .secrets.baseline
+          detect-secrets audit --diff .secrets.baseline
+
+  # ── Job 2: YAML lint ───────────────────────────────────────────────────
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run yamllint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          config_file: .yamllint.yml
+          file_or_dir: .
+          strict: true
+
+  # ── Job 3: Ansible lint ────────────────────────────────────────────────
+  ansible-lint:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible + lint tools
+        run: |
+          pip install ansible ansible-lint
+          ansible-galaxy collection install \
+            community.general \
+            ansible.posix \
+            pfsensible.core
+
+      - name: Run ansible-lint
+        run: |
+          ansible-lint ansible/
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+
+  # ── Job 4: Kubernetes manifest validation ─────────────────────────────
+  k8s-validate:
+    name: K8s Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin
+
+      - name: Validate k3s manifests
+        run: |
+          find k3s/ -name '*.yml' -o -name '*.yaml' | \
+            grep -v 'sealed' | \
+            xargs kubeconform \
+              -strict \
+              -ignore-missing-schemas \
+              -kubernetes-version 1.31.0 \
+              -summary

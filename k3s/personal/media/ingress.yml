@@ -1,0 +1,113 @@
+---
+# k3s/personal/media/ingress.yml
+# Ingress rules for media stack — internal access only (no Cloudflare Tunnel)
+# All ARR apps are private — accessible via Tailscale only
+# Jellyfin gets a public URL via Cloudflare Tunnel (in jellyfin/ manifest)
+#
+# Access URLs (via Tailscale):
+#   http://sabnzbd.lab.blerdmh.local     → SABnzbd (via gluetun service)
+#   http://qbittorrent.lab.blerdmh.local → qBittorrent (via gluetun service)
+#   http://prowlarr.lab.blerdmh.local    → Prowlarr
+#   http://radarr.lab.blerdmh.local      → Radarr
+#   http://sonarr.lab.blerdmh.local      → Sonarr
+#   http://lidarr.lab.blerdmh.local      → Lidarr
+#   http://bazarr.lab.blerdmh.local      → Bazarr
+#   http://huntarr.lab.blerdmh.local     → Huntarr
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: arr-stack-ingress
+  namespace: media
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: sabnzbd.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gluetun
+                port:
+                  number: 8080
+
+    - host: qbittorrent.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gluetun
+                port:
+                  number: 8090
+
+    - host: prowlarr.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prowlarr
+                port:
+                  number: 9696
+
+    - host: radarr.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: radarr
+                port:
+                  number: 7878
+
+    - host: sonarr.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sonarr
+                port:
+                  number: 8989
+
+    - host: lidarr.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lidarr
+                port:
+                  number: 8686
+
+    - host: bazarr.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bazarr
+                port:
+                  number: 6767
+
+    - host: huntarr.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: huntarr
+                port:
+                  number: 9705

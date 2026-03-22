@@ -1,0 +1,76 @@
+---
+# ansible/roles/pfsense/tasks/aliases.yml
+# Defines all firewall aliases used in rules
+# Run this before rules.yml — rules reference these aliases
+
+- name: Create alias — RFC1918 (private IP ranges)
+  pfsensible.core.pfsense_alias:
+    name: RFC1918
+    type: network
+    address: "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
+    descr: "All private RFC1918 address space"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create alias — MGMT_HOSTS (admin workstations)
+  pfsensible.core.pfsense_alias:
+    name: MGMT_HOSTS
+    type: host
+    address: "10.0.10.10"   # Skynet workstation
+    descr: "Authorized management hosts"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create alias — K3S_NODES (individual k3s host IPs)
+  pfsensible.core.pfsense_alias:
+    name: K3S_NODES
+    type: host
+    address: "10.0.20.10 10.0.20.11 10.0.20.12 10.0.20.13"
+    descr: "k3s control plane and worker nodes — host type (individual IPs)"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create alias — SECURITY_VMS (VLAN 40 security stack hosts)
+  pfsensible.core.pfsense_alias:
+    name: SECURITY_VMS
+    type: host
+    address: "10.0.40.10 10.0.40.11 10.0.40.12 10.0.40.13"
+    descr: "Wazuh, IDS, OpenVAS, Grafana VMs — host type (individual IPs)"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create alias — NAS_HOST
+  pfsensible.core.pfsense_alias:
+    name: NAS_HOST
+    type: host
+    address: "10.0.20.5"   # ZimaBoard TrueNAS
+    descr: "TrueNAS Scale on ZimaBoard"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create alias — DNS_SERVERS
+  pfsensible.core.pfsense_alias:
+    name: DNS_SERVERS
+    type: host
+    address: "10.0.10.1 10.0.10.3"
+    descr: "pfSense DNS + secondary resolver"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create alias — PROXMOX_NODES
+  pfsensible.core.pfsense_alias:
+    name: PROXMOX_NODES
+    type: host
+    address: "10.0.10.20 10.0.10.21"
+    descr: "AMDPVE (10.0.10.20) and N1 Mini PVE (10.0.10.21)"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create alias — TAILSCALE_SUBNET
+  pfsensible.core.pfsense_alias:
+    name: TAILSCALE_SUBNET
+    type: network
+    address: "100.64.0.0/10"
+    descr: "Tailscale CGNAT range"
+    state: present
+  delegate_to: "{{ pfsense_host }}"

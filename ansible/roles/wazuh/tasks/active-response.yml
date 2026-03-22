@@ -1,0 +1,52 @@
+---
+# ansible/roles/wazuh/tasks/active-response.yml
+# Configure Wazuh active response — automated blocking of attack sources
+# Active response runs scripts on the agent when triggered by rules
+#
+# Configured responses:
+#   1. SSH brute force → firewall-drop (blocks attacking IP via UFW)
+#   2. Port scan → firewall-drop
+#
+# ⚠️  Test in lab before enabling — misconfiguration can lock you out
+#     Start with active_response_enabled: false, observe alerts, then enable
+
+- name: Configure active response in ossec.conf
+  ansible.builtin.blockinfile:
+    path: /var/ossec/etc/ossec.conf
+    insertafter: "</rules>"
+    block: |
+      <!-- Active Response Configuration -->
+      <active-response>
+        <disabled>{{ 'no' if wazuh_active_response_enabled else 'yes' }}</disabled>
+
+        <!-- SSH brute force auto-block -->
+        <command>firewall-drop</command>
+        <location>local</location>
+        <rules_id>100100</rules_id>
+        <timeout>{{ wazuh_block_timeout }}</timeout>
+      </active-response>
+
+      <active-response>
+        <disabled>{{ 'no' if wazuh_active_response_enabled else 'yes' }}</disabled>
+
+        <!-- Port scan auto-block -->
+        <command>firewall-drop</command>
+        <location>local</location>
+        <rules_id>100500</rules_id>
+        <timeout>{{ wazuh_block_timeout }}</timeout>
+      </active-response>
+    marker: "<!-- {mark} ANSIBLE MANAGED — ACTIVE RESPONSE -->"
+  notify: restart wazuh-manager
+
+- name: Ensure firewall-drop active response script is present
+  ansible.builtin.stat:
+    path: /var/ossec/active-response/bin/firewall-drop
+  register: ar_script
+
+- name: Display active response status
+  ansible.builtin.debug:
+    msg: >
+      Active response configured.
+      Status: {{ 'ENABLED' if wazuh_active_response_enabled else 'DISABLED (set wazuh_active_response_enabled: true to enable)' }}
+      Block timeout: {{ wazuh_block_timeout }} seconds
+      Triggers: SSH brute force (rule 100100), Port scan (rule 100500)

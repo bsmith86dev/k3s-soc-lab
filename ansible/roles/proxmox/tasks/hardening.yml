@@ -1,0 +1,147 @@
+---
+# ansible/roles/proxmox/tasks/hardening.yml
+# Security hardening for Proxmox nodes
+# Covers: SSH, firewall, kernel params, auditing
+
+- name: Harden SSH config for Proxmox node
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    block: |
+      PermitRootLogin prohibit-password
+      PasswordAuthentication no
+      PubkeyAuthentication yes
+      AuthorizedKeysFile .ssh/authorized_keys
+      X11Forwarding no
+      MaxAuthTries 3
+      LoginGraceTime 30
+      AllowUsers root
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+    marker: "# {mark} ANSIBLE MANAGED — SSH HARDENING"
+  notify: restart sshd
+
+- name: Configure kernel security parameters
+  ansible.builtin.blockinfile:
+    path: /etc/sysctl.d/99-proxmox-hardening.conf
+    create: yes
+    block: |
+      # Network hardening
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.default.rp_filter = 1
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.all.secure_redirects = 1
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+      net.ipv4.tcp_syncookies = 1
+
+      # Memory hardening
+      kernel.dmesg_restrict = 1
+      kernel.kptr_restrict = 2
+      kernel.randomize_va_space = 2
+
+      # Core dump restrictions
+      fs.suid_dumpable = 0
+    marker: "# {mark} ANSIBLE MANAGED — KERNEL HARDENING"
+
+- name: Apply sysctl settings
+  ansible.builtin.command:
+    cmd: sysctl --system
+  changed_when: true
+
+- name: Configure Proxmox built-in firewall — enable on cluster
+  ansible.builtin.lineinfile:
+    path: /etc/pve/firewall/cluster.fw
+    create: yes
+    line: "{{ item }}"
+  loop:
+    - "[OPTIONS]"
+    - "enable: 1"
+    - "policy_in: DROP"
+    - "policy_out: ACCEPT"
+  run_once: true   # cluster.fw is replicated by pmxcfs
+
+- name: Allow Proxmox web UI through PVE firewall (MGMT only)
+  ansible.builtin.blockinfile:
+    path: /etc/pve/firewall/cluster.fw
+    block: |
+      [RULES]
+      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 8006 -log info # Proxmox web UI from MGMT
+      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 22 -log info   # SSH from MGMT
+      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 3128 -log info # SPICE proxy from MGMT
+      IN ACCEPT -p tcp -dport 5405:5412 -log nolog                  # Corosync cluster comms
+      IN ACCEPT -p udp -dport 5405:5412 -log nolog                  # Corosync cluster comms
+      IN DROP   -log warning                                         # Drop everything else
+    marker: "# {mark} ANSIBLE MANAGED — CLUSTER FIREWALL RULES"
+    insertafter: "\\[OPTIONS\\]"
+  run_once: true
+
+- name: Install auditd for security event logging
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+
+- name: Configure audit rules
+  ansible.builtin.blockinfile:
+    path: /etc/audit/rules.d/proxmox-lab.rules
+    create: yes
+    block: |
+      # Audit privileged command execution
+      -a always,exit -F arch=b64 -S execve -F euid=0 -k root-commands
+      # Audit SSH logins
+      -w /var/log/auth.log -p wa -k auth-log
+      # Audit Proxmox config changes
+      -w /etc/pve/ -p wa -k pve-config
+      # Audit network changes
+      -w /etc/network/ -p wa -k network-config
+    marker: "# {mark} ANSIBLE MANAGED — AUDIT RULES"
+
+- name: Enable and start auditd
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: yes
+    state: started
+
+- name: Configure fail2ban for SSH on Proxmox node
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/proxmox-ssh.conf
+    content: |
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 3600
+      findtime = 600
+
+      [proxmox-web]
+      enabled = true
+      port = 8006
+      filter = proxmox
+      logpath = /var/log/daemon.log
+      maxretry = 3
+      bantime = 3600
+      findtime = 600
+    mode: '0644'
+  notify: restart fail2ban
+
+- name: Install fail2ban Proxmox filter
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/filter.d/proxmox.conf
+    content: |
+      [Definition]
+      failregex = pvedaemon\[.*\]: authentication failure; rhost=<HOST> user=.* msg=.*
+      ignoreregex =
+    mode: '0644'
+  notify: restart fail2ban
+
+- name: Enable and start fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: yes
+    state: started

@@ -1,0 +1,76 @@
+---
+# ansible/roles/common/tasks/system.yml
+# Hostname, locale, timezone, kernel params
+
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Update /etc/hosts with correct hostname
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1'
+    line: "127.0.1.1 {{ inventory_hostname }}.lab.blerdmh.local {{ inventory_hostname }}"
+
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ common_timezone }}"
+
+- name: Set locale
+  ansible.builtin.locale_gen:
+    name: "{{ common_locale }}"
+    state: present
+
+- name: Set default locale
+  ansible.builtin.copy:
+    dest: /etc/default/locale
+    content: |
+      LANG={{ common_locale }}
+      LC_ALL={{ common_locale }}
+    mode: '0644'
+
+- name: Configure kernel network parameters
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-lab-common.conf
+    reload: yes
+  loop:
+    - { key: "net.ipv4.tcp_syncookies",             value: "1" }
+    - { key: "net.ipv4.conf.all.accept_redirects",  value: "0" }
+    - { key: "net.ipv4.conf.all.send_redirects",    value: "0" }
+    - { key: "net.ipv4.conf.all.rp_filter",         value: "1" }
+    - { key: "net.ipv4.conf.all.accept_source_route", value: "0" }
+    - { key: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+    - { key: "kernel.dmesg_restrict",               value: "1" }
+    - { key: "kernel.kptr_restrict",                value: "2" }
+    - { key: "fs.suid_dumpable",                    value: "0" }
+
+- name: Disable core dumps
+  ansible.builtin.blockinfile:
+    path: /etc/security/limits.d/no-core-dumps.conf
+    create: yes
+    block: |
+      * hard core 0
+      * soft core 0
+    marker: "# {mark} ANSIBLE MANAGED — CORE DUMPS"
+
+- name: Set MOTD banner
+  ansible.builtin.copy:
+    dest: /etc/motd
+    content: |
+      ╔══════════════════════════════════════════════════════════════╗
+      ║           blerdmh-lab — Authorized Access Only               ║
+      ║   All activity on this system is monitored and logged.       ║
+      ║   Unauthorized access is prohibited and will be reported.    ║
+      ╚══════════════════════════════════════════════════════════════╝
+    mode: '0644'
+
+- name: Disable unnecessary services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: no
+    state: stopped
+  loop: "{{ common_disabled_services }}"
+  ignore_errors: yes   # Service may not exist on all hosts

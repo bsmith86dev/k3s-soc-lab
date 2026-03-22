@@ -1,0 +1,162 @@
+---
+# ansible/roles/wazuh/tasks/manager.yml
+# Install Wazuh Manager, OpenSearch, and Dashboard on wazuh-vm
+# Uses the official Wazuh all-in-one install script for simplicity
+# Target: wazuh-vm (10.0.40.10, VLAN 40 SECURITY)
+#
+# Resource requirements (enforced in VM definition):
+#   CPU:  4 cores minimum
+#   RAM:  8GB minimum
+#   Disk: 80GB minimum (OpenSearch is disk-hungry)
+
+- name: Check if Wazuh manager is already installed
+  ansible.builtin.stat:
+    path: /var/ossec/bin/wazuh-control
+  register: wazuh_installed
+
+- name: Install prerequisites
+  ansible.builtin.apt:
+    name:
+      - curl
+      - apt-transport-https
+      - lsb-release
+      - gnupg2
+    state: present
+    update_cache: yes
+
+- name: Add Wazuh GPG key
+  ansible.builtin.get_url:
+    url: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+    dest: /usr/share/keyrings/wazuh.gpg
+    mode: '0644'
+  when: not wazuh_installed.stat.exists
+
+- name: Add Wazuh APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+    filename: wazuh
+    state: present
+  when: not wazuh_installed.stat.exists
+
+- name: Install Wazuh manager package
+  ansible.builtin.apt:
+    name: "wazuh-manager={{ wazuh_version }}-*"
+    state: present
+    update_cache: yes
+  when: not wazuh_installed.stat.exists
+
+- name: Enable and start Wazuh manager
+  ansible.builtin.systemd:
+    name: wazuh-manager
+    enabled: yes
+    state: started
+
+- name: Add OpenSearch GPG key
+  ansible.builtin.get_url:
+    url: https://artifacts.opensearch.org/publickeys/opensearch.pgp
+    dest: /usr/share/keyrings/opensearch.gpg
+    mode: '0644'
+
+- name: Add OpenSearch APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/opensearch.gpg] https://artifacts.opensearch.org/releases/bundle/opensearch/2.x/apt stable main"
+    filename: opensearch
+    state: present
+
+- name: Install OpenSearch
+  ansible.builtin.apt:
+    name: opensearch
+    state: present
+    update_cache: yes
+
+- name: Configure OpenSearch for Wazuh
+  ansible.builtin.blockinfile:
+    path: /etc/opensearch/opensearch.yml
+    block: |
+      network.host: 0.0.0.0
+      node.name: wazuh-node1
+      cluster.initial_cluster_manager_nodes:
+        - wazuh-node1
+      plugins.security.ssl.http.enabled: true
+      plugins.security.ssl.http.pemcert_filepath: /etc/opensearch/certs/wazuh.pem
+      plugins.security.ssl.http.pemkey_filepath: /etc/opensearch/certs/wazuh-key.pem
+      plugins.security.ssl.http.pemtrustedcas_filepath: /etc/opensearch/certs/root-ca.pem
+      plugins.security.ssl.transport.pemcert_filepath: /etc/opensearch/certs/wazuh.pem
+      plugins.security.ssl.transport.pemkey_filepath: /etc/opensearch/certs/wazuh-key.pem
+      plugins.security.ssl.transport.pemtrustedcas_filepath: /etc/opensearch/certs/root-ca.pem
+      plugins.security.ssl.transport.enforce_hostname_verification: false
+      plugins.security.authcz.admin_dn:
+        - "CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US"
+      plugins.security.nodes_dn:
+        - "CN=wazuh-node1,OU=Wazuh,O=Wazuh,L=California,C=US"
+    marker: "# {mark} ANSIBLE MANAGED — WAZUH CONFIG"
+  notify: restart wazuh-manager
+
+- name: Set JVM heap for OpenSearch (half of available RAM)
+  ansible.builtin.lineinfile:
+    path: /etc/opensearch/jvm.options
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^-Xms', line: "-Xms{{ (ansible_memtotal_mb / 2) | int }}m" }
+    - { regexp: '^-Xmx', line: "-Xmx{{ (ansible_memtotal_mb / 2) | int }}m" }
+  notify: restart wazuh-manager
+
+- name: Enable and start OpenSearch
+  ansible.builtin.systemd:
+    name: opensearch
+    enabled: yes
+    state: started
+
+- name: Install Wazuh dashboard
+  ansible.builtin.apt:
+    name: "wazuh-dashboard={{ wazuh_version }}-*"
+    state: present
+
+- name: Configure Wazuh dashboard
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^server.host:', line: "server.host: 0.0.0.0" }
+    - { regexp: '^server.port:', line: "server.port: 443" }
+    - { regexp: '^opensearch.hosts:', line: "opensearch.hosts: [\"https://127.0.0.1:9200\"]" }
+  notify: restart wazuh-dashboard
+
+- name: Enable and start Wazuh dashboard
+  ansible.builtin.systemd:
+    name: wazuh-dashboard
+    enabled: yes
+    state: started
+
+- name: Configure UFW for Wazuh manager
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    src: "{{ item.src }}"
+    comment: "{{ item.comment }}"
+  loop:
+    - { port: "1514",  proto: udp, src: "10.0.0.0/8",    comment: "Wazuh agent UDP" }
+    - { port: "1514",  proto: tcp, src: "10.0.0.0/8",    comment: "Wazuh agent TCP" }
+    - { port: "1515",  proto: tcp, src: "10.0.0.0/8",    comment: "Wazuh agent enrollment" }
+    - { port: "514",   proto: udp, src: "10.0.0.0/8",    comment: "Syslog ingest" }
+    - { port: "55000", proto: tcp, src: "10.0.10.0/24",  comment: "Wazuh API from MGMT" }
+    - { port: "443",   proto: tcp, src: "10.0.10.0/24",  comment: "Wazuh dashboard from MGMT" }
+    - { port: "9200",  proto: tcp, src: "10.0.40.0/24",  comment: "OpenSearch API local" }
+
+- name: Wait for Wazuh manager to be fully started
+  ansible.builtin.wait_for:
+    port: 1515
+    host: "{{ ansible_host }}"
+    delay: 10
+    timeout: 120
+
+- name: Display Wazuh dashboard access info
+  ansible.builtin.debug:
+    msg: |
+      Wazuh deployment complete.
+      Dashboard: https://{{ ansible_host }}
+      Default credentials: admin / SecretPassword (change immediately)
+      API: https://{{ ansible_host }}:55000

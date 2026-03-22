@@ -1,0 +1,43 @@
+---
+# ansible/roles/proxmox/tasks/network.yml
+# Configure VLAN-aware network bridges on each Proxmox node
+#
+# Bridge design:
+#   vmbr0 — VLAN-aware bridge on the physical NIC
+#            VMs attach to this bridge with a VLAN tag set per-VM
+#            Proxmox creates the tagged sub-interface automatically
+#
+# The physical NIC name varies by node — set in host_vars or defaults:
+#   AMDPVE: proxmox_nic: "enp5s0"  (verify with: ip link show)
+#   N1 Mini: proxmox_nic: "enp2s0" (verify with: ip link show)
+#
+# After this task runs, node needs a network restart — handled by handler.
+# ⚠️  Do NOT run this remotely if you only have one path in — you will
+#     lose connectivity. Run from console or ensure Tailscale is up first.
+
+- name: Check current network config
+  ansible.builtin.stat:
+    path: /etc/network/interfaces
+  register: net_interfaces
+
+- name: Back up current network interfaces file
+  ansible.builtin.copy:
+    src: /etc/network/interfaces
+    dest: "/etc/network/interfaces.bak-{{ ansible_date_time.date }}"
+    remote_src: yes
+  when: net_interfaces.stat.exists
+
+- name: Deploy network interfaces config
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'ifupdown2 --syntax-check %s'
+  notify: reload network interfaces
+
+- name: Ensure ifupdown2 is installed (required for non-disruptive reloads)
+  ansible.builtin.apt:
+    name: ifupdown2
+    state: present

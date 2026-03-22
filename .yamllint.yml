@@ -1,0 +1,35 @@
+---
+# .yamllint.yml
+# YAML lint configuration
+# Enforced in CI (01-ci.yml) and pre-commit hooks
+
+extends: default
+
+rules:
+  line-length:
+    max: 160          # Ansible tasks can be verbose
+    level: warning
+
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
+
+  comments:
+    min-spaces-from-content: 1
+
+  braces:
+    max-spaces-inside: 1
+
+  brackets:
+    max-spaces-inside: 1
+
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+ignore: |
+  .git/
+  site/
+  *.sealed.yml
+  ansible/inventory/group_vars/all/vault.yml

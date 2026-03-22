@@ -1,0 +1,33 @@
+---
+# ansible/roles/common/handlers/main.yml
+# Triggered by notify: in common tasks
+# These run once at the end of a play, even if notified multiple times
+
+- name: Restart sshd
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+  listen: "restart sshd"
+
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+  listen: "restart fail2ban"
+
+- name: Reload ufw
+  ansible.builtin.command:
+    cmd: ufw reload
+  listen: "reload ufw"
+
+- name: Restart unattended-upgrades
+  ansible.builtin.service:
+    name: unattended-upgrades
+    state: restarted
+  listen: "restart unattended-upgrades"
+
+- name: Reboot host
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+    msg: "Ansible triggered reboot after kernel/config change"
+  listen: "reboot host"

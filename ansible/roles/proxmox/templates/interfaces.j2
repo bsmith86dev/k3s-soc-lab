@@ -1,0 +1,38 @@
+{# ansible/roles/proxmox/templates/interfaces.j2 #}
+{# Proxmox network interfaces — VLAN-aware bridge design               #}
+{# Rendered per node using host_vars (proxmox_nic, proxmox_mgmt_ip)   #}
+{# Verify NIC name before applying: ip link show                       #}
+
+auto lo
+iface lo inet loopback
+
+# Physical NIC — no IP, just a bridge member
+auto {{ proxmox_nic }}
+iface {{ proxmox_nic }} inet manual
+
+# vmbr0 — VLAN-aware bridge
+# VMs set their VLAN tag in the VM hardware config
+# Proxmox handles the 802.1Q tagging transparently
+auto vmbr0
+iface vmbr0 inet static
+    address {{ proxmox_mgmt_ip }}/24
+    gateway {{ proxmox_mgmt_gw }}
+    bridge-ports {{ proxmox_nic }}
+    bridge-stp off
+    bridge-fd 0
+    bridge-vlan-aware yes
+    bridge-vids 2-4094
+    # VLAN 10 = native/untagged for Proxmox management traffic
+
+{% if proxmox_role == 'primary' %}
+# AMDPVE only — Ceph public network (VLAN 30)
+# N1 Mini also needs this if participating in Ceph
+auto vmbr0.30
+iface vmbr0.30 inet static
+    address {{ proxmox_ceph_pub_ip }}/24
+
+# Ceph cluster/replication network (VLAN 31)
+auto vmbr0.31
+iface vmbr0.31 inet static
+    address {{ proxmox_ceph_cluster_ip }}/24
+{% endif %}

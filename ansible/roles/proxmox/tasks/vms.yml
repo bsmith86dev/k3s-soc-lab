@@ -1,0 +1,85 @@
+---
+# ansible/roles/proxmox/tasks/vms.yml
+# Provision virtual machines on Proxmox nodes
+# Uses community.general.proxmox_kvm module via Proxmox API
+#
+# All VMs defined in proxmox_vms list (defaults/main.yml)
+# Cloud-init is used for initial configuration (hostname, SSH key, IP)
+#
+# Prerequisites:
+#   - Ubuntu 24.04 cloud image downloaded and converted to template
+#     Run once on AMDPVE:
+#       wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+#       qm create 9000 --name ubuntu-24.04-template --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
+#       qm importdisk 9000 noble-server-cloudimg-amd64.img local-nvme
+#       qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-nvme:vm-9000-disk-0
+#       qm set 9000 --ide2 local-nvme:cloudinit --boot c --bootdisk scsi0
+#       qm set 9000 --serial0 socket --vga serial0
+#       qm template 9000
+#   - Proxmox API token in vault.yml
+
+- name: Provision virtual machines from cloud-init template
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}@pam"
+    api_token_id: "ansible"
+    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+    vmid: "{{ item.vmid }}"
+    name: "{{ item.name }}"
+    node: "{{ item.node }}"
+    clone: "{{ item.clone | default(proxmox_vm_template_id) }}"
+    full: yes
+    storage: "{{ item.storage | default('local-nvme') }}"
+    cores: "{{ item.cores | default(2) }}"
+    sockets: "{{ item.sockets | default(1) }}"
+    memory: "{{ item.memory | default(4096) }}"
+    balloon: "{{ item.balloon | default(0) }}"
+    net:
+      net0: "virtio,bridge=vmbr0,tag={{ item.vlan }}"
+    ipconfig:
+      ipconfig0: "ip={{ item.ip }}/24,gw={{ item.gateway }}"
+    nameservers: "{{ item.dns | default('10.0.10.1') }}"
+    searchdomains: "lab.blerdmh.local"
+    sshkeys: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+    ciuser: "{{ item.ciuser | default('techinb') }}"
+    description: "{{ item.description | default('') }}"
+    tags: "{{ item.tags | default([]) | join(';') }}"
+    onboot: "{{ item.onboot | default(true) }}"
+    agent: "enabled=1"   # Requires qemu-guest-agent installed in VM
+    state: present
+  loop: "{{ proxmox_vms }}"
+  delegate_to: localhost
+
+- name: Resize VM disks to specified size
+  community.general.proxmox_disk:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}@pam"
+    api_token_id: "ansible"
+    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+    vmid: "{{ item.vmid }}"
+    disk: scsi0
+    size: "{{ item.disk_size | default('40G') }}"
+    state: resized
+  loop: "{{ proxmox_vms }}"
+  delegate_to: localhost
+
+- name: Start virtual machines
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}@pam"
+    api_token_id: "ansible"
+    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+    vmid: "{{ item.vmid }}"
+    node: "{{ item.node }}"
+    state: started
+  loop: "{{ proxmox_vms }}"
+  delegate_to: localhost
+
+- name: Wait for VMs to be reachable via SSH
+  ansible.builtin.wait_for:
+    host: "{{ item.ip }}"
+    port: 22
+    delay: 10
+    timeout: 120
+  loop: "{{ proxmox_vms }}"
+  delegate_to: localhost

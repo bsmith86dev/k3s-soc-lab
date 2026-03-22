@@ -1,0 +1,31 @@
+---
+# k3s/namespaces/namespaces.yml
+# All cluster namespaces — apply this first before any other manifest
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: media
+  labels:
+    app.kubernetes.io/managed-by: ansible
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: personal
+  labels:
+    app.kubernetes.io/managed-by: ansible
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homeauto
+  labels:
+    app.kubernetes.io/managed-by: ansible
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    app.kubernetes.io/managed-by: ansible

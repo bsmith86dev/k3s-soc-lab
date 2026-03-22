@@ -1,0 +1,175 @@
+---
+# ansible/roles/security/tasks/zeek.yml
+# Install and configure Zeek Network Security Monitor on ids-vm
+#
+# Zeek produces structured logs (conn.log, dns.log, http.log, etc.)
+# These are shipped to Wazuh via the agent file monitoring module
+# and can be pulled into Grafana/Loki for dashboard visualization
+#
+# Zeek complements Suricata:
+#   Suricata → signature-based alert detection
+#   Zeek     → deep protocol analysis, connection metadata, anomaly hunting
+
+- name: Add Zeek repository key
+  ansible.builtin.get_url:
+    url: https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key
+    dest: /usr/share/keyrings/zeek-archive-keyring.asc
+    mode: '0644'
+
+- name: Add Zeek repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/zeek-archive-keyring.asc] https://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /"
+    filename: zeek
+    state: present
+    update_cache: yes
+
+- name: Install Zeek
+  ansible.builtin.apt:
+    name: zeek
+    state: present
+
+- name: Add Zeek to PATH
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    regexp: 'PATH='
+    line: 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/zeek/bin"'
+
+- name: Configure Zeek node.cfg
+  ansible.builtin.copy:
+    dest: /opt/zeek/etc/node.cfg
+    content: |
+      [logger]
+      type=logger
+      host=localhost
+
+      [manager]
+      type=manager
+      host=localhost
+
+      [proxy-1]
+      type=proxy
+      host=localhost
+
+      [worker-1]
+      type=worker
+      host=localhost
+      interface={{ suricata_capture_interface }}
+      lb_method=pf_ring
+      lb_procs=2
+    mode: '0644'
+  notify: reload zeek scripts
+
+- name: Configure Zeek networks.cfg (HOME_NET)
+  ansible.builtin.copy:
+    dest: /opt/zeek/etc/networks.cfg
+    content: |
+      10.0.0.0/8          Lab private ranges
+    mode: '0644'
+
+- name: Configure Zeek local.zeek — enable extra log sources
+  ansible.builtin.blockinfile:
+    path: /opt/zeek/share/zeek/site/local.zeek
+    create: yes
+    block: |
+      # Load standard frameworks
+      @load base/frameworks/software
+      @load misc/detect-traceroute
+      @load frameworks/software/vulnerable
+      @load frameworks/software/version-changes
+      @load policy/tuning/track-all-assets.zeek
+
+      # Logging
+      @load policy/misc/capture-loss
+      @load policy/misc/stats
+      @load policy/protocols/conn/vlan-logging
+      @load policy/protocols/conn/mac-logging
+      @load policy/protocols/dns/detect-external-names
+
+      # Security scripts
+      @load policy/protocols/ssh/detect-bruteforcing
+      @load policy/protocols/ssh/geo-data
+      @load policy/protocols/http/detect-sqli
+      @load policy/protocols/ssl/expiring-certs
+      @load policy/protocols/ssl/validate-certs
+    marker: "# {mark} ANSIBLE MANAGED — ZEEK LOCAL SCRIPTS"
+
+- name: Create Zeek log directory
+  ansible.builtin.file:
+    path: /var/log/zeek
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Configure Zeek to write logs to /var/log/zeek
+  ansible.builtin.lineinfile:
+    path: /opt/zeek/etc/zeekctl.cfg
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^LogDir', line: "LogDir = /var/log/zeek" }
+    - { regexp: '^SpoolDir', line: "SpoolDir = /var/spool/zeek" }
+
+- name: Configure logrotate for Zeek logs
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/zeek
+    content: |
+      /var/log/zeek/**/*.log {
+          hourly
+          rotate 168
+          compress
+          delaycompress
+          missingok
+          notifempty
+          sharedscripts
+      }
+    mode: '0644'
+
+- name: Deploy zeekctl as systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/zeek.service
+    content: |
+      [Unit]
+      Description=Zeek Network Security Monitor
+      After=network.target
+
+      [Service]
+      Type=forking
+      ExecStartPre=/opt/zeek/bin/zeekctl deploy
+      ExecStart=/opt/zeek/bin/zeekctl start
+      ExecStop=/opt/zeek/bin/zeekctl stop
+      ExecReload=/opt/zeek/bin/zeekctl deploy
+      Restart=on-failure
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+  notify: reload systemd
+
+- name: Deploy Zeek configuration
+  ansible.builtin.command:
+    cmd: /opt/zeek/bin/zeekctl deploy
+  register: zeekctl_deploy
+  changed_when: true
+  failed_when:
+    - zeekctl_deploy.rc != 0
+    - "'error' in zeekctl_deploy.stderr | lower"
+
+- name: Enable and start Zeek
+  ansible.builtin.systemd:
+    name: zeek
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Verify Zeek is running
+  ansible.builtin.command:
+    cmd: /opt/zeek/bin/zeekctl status
+  register: zeek_status
+  changed_when: false
+  failed_when: false
+
+- name: Display Zeek status
+  ansible.builtin.debug:
+    msg: "{{ zeek_status.stdout_lines }}"

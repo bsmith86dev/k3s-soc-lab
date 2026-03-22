@@ -1,0 +1,17 @@
+# {{ ansible_managed }}
+# /etc/fail2ban/jail.d/lab-ssh.conf
+# Managed by Ansible — common role
+
+[DEFAULT]
+bantime  = {{ common_fail2ban_bantime }}
+findtime = {{ common_fail2ban_findtime }}
+maxretry = {{ common_fail2ban_maxretry }}
+ignoreip = 127.0.0.1/8 10.0.10.0/24 100.64.0.0/10
+
+[sshd]
+enabled  = true
+port     = ssh
+filter   = sshd
+logpath  = /var/log/auth.log
+maxretry = {{ common_fail2ban_maxretry }}
+banaction = ufw

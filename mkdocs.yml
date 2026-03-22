@@ -1,0 +1,90 @@
+---
+# mkdocs.yml
+# MkDocs Material documentation site
+# Build: mkdocs build
+# Serve locally: mkdocs serve
+# Deploy: handled by .github/workflows/03-docs.yml → GitHub Pages
+
+site_name: blerdmh Lab
+site_description: Enterprise-grade cybersecurity home lab — architecture, runbooks, and portfolio projects
+site_author: techinb
+site_url: https://techinb.github.io/blerdmh-lab/
+repo_url: https://github.com/techinb/blerdmh-lab
+repo_name: techinb/blerdmh-lab
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep purple
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Architecture:
+      - Overview: 00-ARCHITECTURE.md
+      - Network: network/pfsense-firewall.md
+      - Storage: 04-TRUENAS-STORAGE.md
+  - Rebuild Guide:
+      - Overview: 02-REBUILD-GUIDE.md
+      - Phase 3 — TrueNAS: 04b-REBUILD-PHASE3-TRUENAS.md
+  - CI/CD:
+      - Overview: cicd/overview.md
+      - Secrets: cicd/secrets.md
+  - Portfolio Projects: portfolio-projects.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/techinb
+    - icon: fontawesome/brands/linkedin
+      link: https://linkedin.com/in/techinb

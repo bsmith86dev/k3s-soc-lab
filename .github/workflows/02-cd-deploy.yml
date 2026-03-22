@@ -1,0 +1,135 @@
+---
+# .github/workflows/02-cd-deploy.yml
+# Continuous Deployment — runs Ansible playbooks against lab hosts
+# Triggered manually (workflow_dispatch) or on push to main after CI passes
+#
+# Uses Tailscale ephemeral auth key to connect GitHub Actions runner
+# to the lab network — no port forwarding or exposed endpoints needed
+#
+# Required GitHub Secrets (set in repo Settings → Secrets → Actions):
+#   ANSIBLE_VAULT_PASSWORD   — decrypts vault.yml
+#   TAILSCALE_AUTH_KEY       — ephemeral+reusable Tailscale key
+#   ANSIBLE_SSH_PRIVATE_KEY  — Skynet SSH private key (id_ed25519)
+
+name: CD Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      playbook:
+        description: 'Playbook to run'
+        required: true
+        type: choice
+        options:
+          - 00-site.yml
+          - 01-baseline.yml
+          - 02-k3s.yml
+          - 03-security.yml
+          - 04-k3s-workloads.yml
+          - 05-proxmox.yml
+          - 06-pfsense.yml
+          - 07-gitea.yml
+        default: '01-baseline.yml'
+      tags:
+        description: 'Ansible tags to run (optional, comma-separated)'
+        required: false
+        type: string
+      limit:
+        description: 'Limit to specific host or group (optional)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run (check mode)'
+        required: false
+        type: boolean
+        default: false
+
+  push:
+    branches: [main]
+    paths:
+      - 'ansible/**'
+      - 'k3s/**'
+
+jobs:
+  deploy:
+    name: Deploy to Lab
+    runs-on: ubuntu-latest
+    environment: lab-production    # Requires manual approval in GitHub
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          args: --accept-routes --hostname=gh-actions-runner
+
+      - name: Verify Tailscale connectivity to lab
+        run: |
+          echo "Testing connectivity to lab hosts..."
+          for host in 10.0.10.20 10.0.10.21 10.0.20.10 10.0.20.11; do
+            echo -n "  $host: "
+            ping -c 1 -W 2 $host > /dev/null 2>&1 && echo "OK" || echo "UNREACHABLE"
+          done
+
+      - name: Set up Python + Ansible
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible and collections
+        run: |
+          pip install ansible ansible-lint
+          ansible-galaxy collection install \
+            community.general \
+            ansible.posix \
+            pfsensible.core
+
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ANSIBLE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 10.0.10.20 10.0.10.21 10.0.20.10 10.0.20.11 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Write Ansible vault password
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > ~/.vault_pass
+          chmod 600 ~/.vault_pass
+
+      - name: Build Ansible command
+        id: build-cmd
+        run: |
+          PLAYBOOK="${{ github.event.inputs.playbook || '01-baseline.yml' }}"
+          CMD="ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/$PLAYBOOK --vault-password-file ~/.vault_pass"
+
+          if [ -n "${{ github.event.inputs.tags }}" ]; then
+            CMD="$CMD --tags ${{ github.event.inputs.tags }}"
+          fi
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            CMD="$CMD --limit ${{ github.event.inputs.limit }}"
+          fi
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+            CMD="$CMD --check --diff"
+          fi
+
+          echo "cmd=$CMD" >> $GITHUB_OUTPUT
+          echo "Running: $CMD"
+
+      - name: Run Ansible playbook
+        run: ${{ steps.build-cmd.outputs.cmd }}
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "False"
+          ANSIBLE_STDOUT_CALLBACK: yaml
+          ANSIBLE_FORCE_COLOR: "1"
+
+      - name: Cleanup sensitive files
+        if: always()
+        run: |
+          rm -f ~/.vault_pass ~/.ssh/id_ed25519
+
+      - name: Disconnect Tailscale
+        if: always()
+        run: tailscale logout || true

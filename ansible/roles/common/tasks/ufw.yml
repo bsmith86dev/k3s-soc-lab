@@ -1,0 +1,51 @@
+---
+# ansible/roles/common/tasks/ufw.yml
+# UFW firewall baseline — all lab Linux hosts
+# Default policy: deny in, allow out
+# MGMT VLAN (10.0.10.0/24) is always permitted SSH
+# Additional ports opened per host via common_ufw_extra_rules variable
+
+- name: Install UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Set UFW default policies
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+    - { direction: routed,   policy: deny }
+
+- name: Allow SSH from MGMT VLAN only
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    src: "10.0.10.0/24"
+    comment: "SSH from MGMT VLAN only"
+
+- name: Allow SSH from Tailscale subnet
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    src: "100.64.0.0/10"
+    comment: "SSH via Tailscale"
+
+- name: Apply host-specific UFW rules
+  community.general.ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    src: "{{ item.src | default('any') }}"
+    comment: "{{ item.comment | default('') }}"
+  loop: "{{ common_ufw_extra_rules }}"
+  when: common_ufw_extra_rules | length > 0
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+    logging: low

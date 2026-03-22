@@ -1,0 +1,68 @@
+---
+# ansible/roles/proxmox/tasks/lxc.yml
+# Provision LXC containers on Proxmox nodes
+# Uses community.general.proxmox module via Proxmox API
+#
+# All containers defined in proxmox_lxc_containers list (defaults/main.yml)
+# Prerequisites:
+#   - Proxmox API token in vault.yml
+#   - Ubuntu 24.04 LXC template downloaded to TrueNAS ISO store
+#     Download: pveam download nfs-truenas-iso ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+#   - Storage backends registered (storage-nfs.yml, zfs.yml complete)
+
+- name: Download Ubuntu 24.04 LXC template if not present
+  ansible.builtin.command:
+    cmd: pveam download nfs-truenas-iso ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+  register: template_download
+  changed_when: template_download.rc == 0
+  failed_when:
+    - template_download.rc != 0
+    - "'already exists' not in template_download.stderr"
+  run_once: true
+
+- name: Provision LXC containers
+  community.general.proxmox:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}@pam"
+    api_token_id: "ansible"
+    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+    vmid: "{{ item.vmid }}"
+    hostname: "{{ item.hostname }}"
+    node: "{{ item.node }}"
+    ostemplate: "{{ item.ostemplate | default('nfs-truenas-iso:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst') }}"
+    storage: "{{ item.storage | default('local-nvme') }}"
+    disk: "{{ item.disk | default('20') }}"
+    cores: "{{ item.cores | default(2) }}"
+    memory: "{{ item.memory | default(2048) }}"
+    swap: "{{ item.swap | default(512) }}"
+    password: "{{ vault_lxc_root_password }}"
+    pubkey: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+    netif: "{{ item.netif }}"
+    features: "{{ item.features | default({}) }}"
+    onboot: "{{ item.onboot | default(true) }}"
+    unprivileged: "{{ item.unprivileged | default(true) }}"
+    description: "{{ item.description | default('') }}"
+    state: present
+  loop: "{{ proxmox_lxc_containers }}"
+  delegate_to: localhost
+
+- name: Start LXC containers
+  community.general.proxmox:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}@pam"
+    api_token_id: "ansible"
+    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+    vmid: "{{ item.vmid }}"
+    node: "{{ item.node }}"
+    state: started
+  loop: "{{ proxmox_lxc_containers }}"
+  delegate_to: localhost
+
+- name: Wait for LXC containers to be reachable
+  ansible.builtin.wait_for:
+    host: "{{ item.ip }}"
+    port: 22
+    delay: 5
+    timeout: 60
+  loop: "{{ proxmox_lxc_containers }}"
+  delegate_to: localhost

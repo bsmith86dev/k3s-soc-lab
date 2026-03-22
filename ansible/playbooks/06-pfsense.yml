@@ -1,0 +1,45 @@
+---
+# ansible/playbooks/06-pfsense.yml
+# Configures pfSense CE firewall
+#
+# IMPORTANT — Read before running:
+#   1. This playbook connects to pfSense via its web UI API (pfsensible.core)
+#      NOT via SSH. pfSense must be reachable at 10.0.10.1.
+#   2. Run aliases and VLANs BEFORE rules — rules reference aliases.
+#   3. DHCP reservations require real MAC addresses set in vault.yml first.
+#   4. Test connectivity before running: curl -k https://10.0.10.1
+#
+# Install collection first:
+#   ansible-galaxy collection install pfsensible.core
+#
+# Run order (safe incremental approach):
+#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags aliases
+#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags vlans
+#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags rules
+#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags dns
+#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags dhcp
+
+- name: Configure pfSense firewall
+  hosts: localhost          # pfsensible.core delegates to pfsense_host directly
+  connection: local
+  gather_facts: no
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+  pre_tasks:
+    - name: Verify pfSense is reachable
+      uri:
+        url: "https://10.0.10.1"
+        validate_certs: no
+        status_code: [200, 301, 302]
+      register: pfsense_check
+      failed_when: false
+
+    - name: Abort if pfSense unreachable
+      fail:
+        msg: "pfSense at 10.0.10.1 is not reachable. Check network connectivity."
+      when: pfsense_check.status is not defined or pfsense_check.status == -1
+
+  roles:
+    - pfsense

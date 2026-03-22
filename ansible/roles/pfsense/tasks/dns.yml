@@ -1,0 +1,85 @@
+---
+# ansible/roles/pfsense/tasks/dns.yml
+# pfSense Unbound DNS resolver configuration
+# Handles internal lab.blerdmh.local resolution + split-horizon for blerdmh.com
+
+- name: "DNS | Configure Unbound resolver settings"
+  pfsensible.core.pfsense_unbound:
+    enabled: true
+    dnssec: true
+    forwarding: false          # Resolve recursively, don't forward to ISP
+    port: 53
+    active_interface: "all"
+    outgoing_interface: "WAN"
+    custom_options: |
+      server:
+        private-domain: "lab.blerdmh.local"
+        private-domain: "home.blerdmh.local"
+        local-zone: "10.0.10.in-addr.arpa." static
+        local-zone: "20.0.10.in-addr.arpa." static
+        local-zone: "40.0.10.in-addr.arpa." static
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DNS | Register — pfSense gateway"
+  pfsensible.core.pfsense_unbound_host:
+    host: "pfsense"
+    domain: "lab.blerdmh.local"
+    ip: "10.0.10.1"
+    descr: "pfSense firewall / gateway"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DNS | Register — AMDPVE"
+  pfsensible.core.pfsense_unbound_host:
+    host: "amdpve"
+    domain: "lab.blerdmh.local"
+    ip: "10.0.10.20"
+    descr: "AMDPVE primary Proxmox node"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DNS | Register — N1 Mini PVE"
+  pfsensible.core.pfsense_unbound_host:
+    host: "n1minipve"
+    domain: "lab.blerdmh.local"
+    ip: "10.0.10.21"
+    descr: "N1 Mini secondary Proxmox node"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DNS | Register — TrueNAS"
+  pfsensible.core.pfsense_unbound_host:
+    host: "truenas"
+    domain: "lab.blerdmh.local"
+    ip: "10.0.20.5"
+    descr: "ZimaBoard TrueNAS Scale"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DNS | Register — k3s control plane"
+  pfsensible.core.pfsense_unbound_host:
+    host: "k3s-cp"
+    domain: "lab.blerdmh.local"
+    ip: "10.0.20.10"
+    descr: "Pi 4 k3s control plane"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DNS | Register — k3s worker 1"
+  pfsensible.core.pfsense_unbound_host:
+    host: "k3s-w1"
+    domain: "lab.blerdmh.local"
+    ip: "10.0.20.11"
+    descr: "Pi 5 k3s worker node"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DNS | Register — Gitea (N1 Mini LXC)"
+  pfsensible.core.pfsense_unbound_host:
+    host: "gitea"
+    domain: "lab.blerdmh.local"
+    ip: "10.0.10.50"
+    descr: "Self-hosted Gitea on N1 Mini LXC 302"
+    state: present
+  delegate_to: "{{ pfsense_host }}"

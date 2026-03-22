@@ -1,0 +1,10 @@
+---
+# ansible/inventory/host_vars/k3s-w2-amd/main.yml
+# AMDPVE VM — k3s GPU worker with RX 5700 XT PCIe passthrough
+
+has_amd_gpu: true
+
+common_ufw_extra_rules:
+  - { rule: allow, port: "10250", proto: tcp, src: "10.0.20.0/24", comment: "kubelet metrics" }
+  - { rule: allow, port: "8472", proto: udp, src: "10.0.20.0/24", comment: "flannel VXLAN" }
+  - { rule: allow, port: "30000:32767", proto: tcp, src: "10.0.20.0/24", comment: "NodePort services" }

@@ -1,0 +1,56 @@
+---
+# ansible/roles/common/tasks/upgrades.yml
+# Unattended security upgrades — all lab hosts
+# Installs security patches automatically, holds back kernel/service upgrades
+# to avoid unexpected reboots during lab exercises
+
+- name: Install unattended-upgrades
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+
+- name: Configure unattended-upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Package-Blacklist {
+        // Hold back packages that could disrupt lab services
+        "proxmox-ve";
+        "pve-kernel*";
+        "k3s";
+        "docker*";
+        "containerd*";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::MinimalSteps "true";
+      Unattended-Upgrade::InstallOnShutdown "false";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+      Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
+      Unattended-Upgrade::SyslogEnable "true";
+      Unattended-Upgrade::SyslogFacility "daemon";
+    mode: '0644'
+  notify: restart unattended-upgrades
+
+- name: Configure auto-upgrade schedule
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+    mode: '0644'
+
+- name: Enable unattended-upgrades service
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: yes
+    state: started

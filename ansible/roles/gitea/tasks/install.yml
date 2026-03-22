@@ -1,0 +1,98 @@
+---
+# ansible/roles/gitea/tasks/install.yml
+# Install Gitea binary and configure systemd service
+
+- name: Create git system user
+  ansible.builtin.user:
+    name: git
+    system: yes
+    shell: /bin/bash
+    home: /home/git
+    create_home: yes
+    comment: "Gitea service account"
+
+- name: Create Gitea directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: git
+    group: git
+    mode: '0750'
+  loop:
+    - /opt/gitea
+    - /var/lib/gitea
+    - /var/lib/gitea/data
+    - /var/lib/gitea/indexers
+    - /var/lib/gitea/repos
+    - /var/lib/gitea/log
+    - /etc/gitea
+
+- name: Check current Gitea version
+  ansible.builtin.command:
+    cmd: /opt/gitea/gitea --version
+  register: gitea_current_version
+  changed_when: false
+  failed_when: false
+
+- name: Download Gitea binary
+  ansible.builtin.get_url:
+    url: "https://github.com/go-gitea/gitea/releases/download/v{{ gitea_version }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}"
+    dest: /opt/gitea/gitea
+    owner: root
+    group: root
+    mode: '0755'
+    checksum: "sha256:https://github.com/go-gitea/gitea/releases/download/v{{ gitea_version }}/gitea-{{ gitea_version }}-linux-{{ gitea_arch }}.sha256"
+  when: >
+    gitea_current_version.rc != 0 or
+    gitea_version not in gitea_current_version.stdout
+  notify: restart gitea
+
+- name: Deploy Gitea app.ini config
+  ansible.builtin.template:
+    src: app.ini.j2
+    dest: /etc/gitea/app.ini
+    owner: root
+    group: git
+    mode: '0640'
+  notify: restart gitea
+
+- name: Deploy Gitea systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gitea.service
+    content: |
+      [Unit]
+      Description=Gitea (Git with a cup of tea)
+      After=network.target
+      After=syslog.target
+
+      [Service]
+      RestartSec=2s
+      Type=notify
+      User=git
+      WorkingDirectory=/var/lib/gitea/
+      ExecStart=/opt/gitea/gitea web --config /etc/gitea/app.ini
+      Restart=always
+      Environment=USER=git HOME=/home/git GITEA_WORK_DIR=/var/lib/gitea
+      CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+      AmbientCapabilities=CAP_NET_BIND_SERVICE
+      PrivateUsers=false
+      LimitNOFILE=65535
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+  notify: reload systemd
+
+- name: Enable and start Gitea
+  ansible.builtin.systemd:
+    name: gitea
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Wait for Gitea to be ready
+  ansible.builtin.wait_for:
+    port: "{{ gitea_http_port }}"
+    host: "{{ ansible_host }}"
+    delay: 5
+    timeout: 60

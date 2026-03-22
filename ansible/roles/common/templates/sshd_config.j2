@@ -1,0 +1,47 @@
+# {{ ansible_managed }}
+# /etc/ssh/sshd_config
+# Managed by Ansible — common role
+# Do not edit manually — changes will be overwritten
+
+# Network
+Port 22
+AddressFamily inet
+ListenAddress 0.0.0.0
+
+# Authentication
+PermitRootLogin {{ common_ssh_permit_root_login }}
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication no
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM yes
+KbdInteractiveAuthentication no
+
+# Hardening
+X11Forwarding no
+PrintMotd no
+PrintLastLog yes
+Banner /etc/motd
+MaxAuthTries {{ common_ssh_max_auth_tries }}
+MaxSessions {{ common_ssh_max_sessions }}
+LoginGraceTime 30
+ClientAliveInterval 300
+ClientAliveCountMax 2
+TCPKeepAlive no
+Compression no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitUserEnvironment no
+
+# Only strong ciphers / MACs / KEX
+Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group18-sha512
+
+# Logging
+LogLevel VERBOSE
+SyslogFacility AUTH
+
+# Subsystem
+Subsystem sftp /usr/lib/openssh/sftp-server

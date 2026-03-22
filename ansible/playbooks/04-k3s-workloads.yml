@@ -1,0 +1,132 @@
+---
+# ansible/playbooks/04-k3s-workloads.yml
+# Deploy k3s manifests to the cluster
+#
+# Prerequisites:
+#   - k3s cluster running (02-k3s.yml complete)
+#   - kubeconfig at ~/.kube/config-blerdmh-lab on Skynet
+#   - Sealed Secrets controller running in cluster
+#   - All sealed secret files committed to repo
+#   - NFS storage backend registered on k3s nodes
+#
+# This playbook runs kubectl apply from Skynet (localhost delegate)
+# It does NOT use the Ansible k8s module — keeping it simple and explicit
+
+- name: Deploy k3s workloads from manifests
+  hosts: k3s_control_plane
+  gather_facts: no
+  become: no
+
+  vars:
+    kubeconfig: "/home/{{ ansible_user }}/.kube/config-blerdmh-lab"
+    manifest_base: "{{ playbook_dir }}/../k3s"
+
+  tasks:
+
+    - name: Verify cluster is reachable
+      ansible.builtin.command:
+        cmd: kubectl get nodes --no-headers
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: nodes_check
+      changed_when: false
+
+    - name: Display cluster nodes
+      ansible.builtin.debug:
+        msg: "{{ nodes_check.stdout_lines }}"
+      delegate_to: localhost
+
+    - name: Apply namespaces
+      ansible.builtin.command:
+        cmd: "kubectl apply -f {{ manifest_base }}/namespaces/"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: ns_result
+      changed_when: "'configured' in ns_result.stdout or 'created' in ns_result.stdout"
+      tags: [workloads, namespaces]
+
+    - name: Apply network policies
+      ansible.builtin.command:
+        cmd: "kubectl apply -f {{ manifest_base }}/network-policy/"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: np_result
+      changed_when: "'configured' in np_result.stdout or 'created' in np_result.stdout"
+      tags: [workloads, network-policy]
+
+    - name: Apply ingress config
+      ansible.builtin.command:
+        cmd: "kubectl apply -f {{ manifest_base }}/ingress/"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: ingress_result
+      changed_when: "'configured' in ingress_result.stdout or 'created' in ingress_result.stdout"
+      tags: [workloads, ingress]
+
+    - name: Apply security manifests (sealed-secrets, GPU plugin)
+      ansible.builtin.command:
+        cmd: "kubectl apply -f {{ manifest_base }}/security/"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: sec_result
+      changed_when: "'configured' in sec_result.stdout or 'created' in sec_result.stdout"
+      tags: [workloads, security]
+
+    - name: Apply monitoring stack
+      ansible.builtin.command:
+        cmd: "kubectl apply -f {{ manifest_base }}/monitoring/ --recursive"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: mon_result
+      changed_when: "'configured' in mon_result.stdout or 'created' in mon_result.stdout"
+      tags: [workloads, monitoring]
+
+    - name: Apply personal services
+      ansible.builtin.command:
+        cmd: "kubectl apply -f {{ manifest_base }}/personal/ --recursive"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: personal_result
+      changed_when: "'configured' in personal_result.stdout or 'created' in personal_result.stdout"
+      tags: [workloads, personal]
+
+    - name: Wait for core deployments to reach Ready state
+      ansible.builtin.command:
+        cmd: >
+          kubectl rollout status deployment/{{ item.name }}
+          -n {{ item.namespace }}
+          --timeout=300s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      loop:
+        - { name: grafana,          namespace: monitoring }
+        - { name: prometheus,       namespace: monitoring }
+        - { name: nextcloud,        namespace: personal }
+        - { name: homeassistant,    namespace: homeauto }
+        - { name: jellyfin,         namespace: media }
+      ignore_errors: yes
+      tags: [workloads, verify]
+
+    - name: Show all pods across all namespaces
+      ansible.builtin.command:
+        cmd: kubectl get pods -A --no-headers
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      delegate_to: localhost
+      register: all_pods
+      changed_when: false
+      tags: [workloads, verify]
+
+    - name: Display pod status
+      ansible.builtin.debug:
+        msg: "{{ all_pods.stdout_lines }}"
+      delegate_to: localhost
+      tags: [workloads, verify]

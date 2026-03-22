@@ -1,0 +1,144 @@
+---
+# ansible/roles/security/tasks/openvas.yml
+# Install Greenbone Vulnerability Manager (OpenVAS) on openvas-vm (10.0.40.12)
+# Uses the official Greenbone Community Edition Docker Compose stack
+# This is the recommended install method as of GVM 22+
+#
+# After install:
+#   Web UI: https://10.0.40.12
+#   Default credentials: admin / admin (change immediately via UI)
+#
+# First feed sync takes 30-60 minutes — this is normal
+# Feeds update automatically daily via the greenbone containers
+
+- name: Install Docker prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+
+- name: Add Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /usr/share/keyrings/docker-archive-keyring.gpg
+    mode: '0644'
+
+- name: Add Docker APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    filename: docker
+    state: present
+    update_cache: yes
+
+- name: Install Docker Engine
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+
+- name: Enable and start Docker
+  ansible.builtin.systemd:
+    name: docker
+    enabled: yes
+    state: started
+
+- name: Create Greenbone Community Edition directory
+  ansible.builtin.file:
+    path: /opt/greenbone
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Download Greenbone Community Edition compose file
+  ansible.builtin.get_url:
+    url: https://greenbone.github.io/docs/latest/_static/docker-compose-22.4.yml
+    dest: /opt/greenbone/docker-compose.yml
+    mode: '0644'
+
+- name: Pull Greenbone container images
+  ansible.builtin.command:
+    cmd: docker compose -f /opt/greenbone/docker-compose.yml pull
+  args:
+    chdir: /opt/greenbone
+  register: gvm_pull
+  changed_when: "'Pulled' in gvm_pull.stdout"
+
+- name: Start Greenbone Community Edition stack
+  ansible.builtin.command:
+    cmd: docker compose -f /opt/greenbone/docker-compose.yml up -d
+  args:
+    chdir: /opt/greenbone
+  register: gvm_start
+  changed_when: "'Started' in gvm_start.stdout or 'Created' in gvm_start.stdout"
+
+- name: Create Greenbone systemd service for auto-start
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/greenbone.service
+    content: |
+      [Unit]
+      Description=Greenbone Community Edition (OpenVAS)
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/greenbone
+      ExecStart=/usr/bin/docker compose up -d
+      ExecStop=/usr/bin/docker compose down
+      TimeoutStartSec=300
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+  notify: reload systemd
+
+- name: Enable Greenbone service
+  ansible.builtin.systemd:
+    name: greenbone
+    enabled: yes
+    daemon_reload: yes
+
+- name: Wait for Greenbone web UI to be available
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 9392
+    delay: 30
+    timeout: 300
+  failed_when: false
+
+- name: Configure UFW for OpenVAS
+  community.general.ufw:
+    rule: allow
+    port: "9392"
+    proto: tcp
+    src: "10.0.10.0/24"
+    comment: "Greenbone/OpenVAS web UI from MGMT"
+
+- name: Create default scan target — lab SERVERS VLAN
+  ansible.builtin.debug:
+    msg: |
+      OpenVAS/Greenbone deployed.
+
+      Web UI:  https://{{ ansible_host }}:9392
+      User:    admin
+      Pass:    admin  ← CHANGE THIS IMMEDIATELY
+
+      Initial feed sync takes 30-60 minutes.
+      Check sync status in: Configuration → Feed Status
+
+      Recommended first scan targets:
+        10.0.20.0/24  — SERVERS VLAN (k3s nodes, TrueNAS)
+        10.0.40.0/24  — SECURITY VLAN (Wazuh, IDS VMs)
+        10.0.10.0/24  — MGMT VLAN (Proxmox nodes)
+
+      Configure scan targets and schedules via the web UI.
+      Export scan reports as PDF/XML for portfolio documentation.

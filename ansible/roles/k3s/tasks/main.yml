@@ -1,0 +1,37 @@
+---
+# ansible/roles/k3s/tasks/main.yml
+# k3s cluster provisioning — control plane and worker nodes
+#
+# Hosts:
+#   k3s_control_plane group → Pi 4 (10.0.20.10) — server mode
+#   k3s_workers group       → Pi 5 (10.0.20.11), k3s-w2-amd (10.0.20.12) — agent mode
+#
+# Run order:
+#   1. pre-flight checks
+#   2. install (server or agent depending on k3s_role variable)
+#   3. Tailscale (Pi 4 only — subnet router)
+#   4. kubeconfig fetch to Skynet
+
+- name: Pre-flight checks
+  import_tasks: preflight.yml
+  tags: [k3s, preflight]
+
+- name: Install k3s server (control plane)
+  import_tasks: install-server.yml
+  tags: [k3s, install, server]
+  when: k3s_role == "server"
+
+- name: Install k3s agent (worker)
+  import_tasks: install-agent.yml
+  tags: [k3s, install, agent]
+  when: k3s_role == "agent"
+
+- name: Configure Tailscale subnet router
+  import_tasks: tailscale.yml
+  tags: [k3s, tailscale]
+  when: k3s_tailscale_subnet_router | bool
+
+- name: Fetch kubeconfig to control node
+  import_tasks: kubeconfig.yml
+  tags: [k3s, kubeconfig]
+  when: k3s_role == "server"

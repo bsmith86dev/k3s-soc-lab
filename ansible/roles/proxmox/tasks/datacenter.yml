@@ -1,0 +1,116 @@
+---
+# ansible/roles/proxmox/tasks/datacenter.yml
+# Configure datacenter-level Proxmox settings
+# These apply cluster-wide — run on primary node (AMDPVE) only
+#
+# Datacenter config lives at: /etc/pve/datacenter.cfg
+# It is replicated automatically across all cluster nodes by pmxcfs
+
+- name: Set datacenter options
+  ansible.builtin.blockinfile:
+    path: /etc/pve/datacenter.cfg
+    create: yes
+    block: |
+      console: xtermjs
+      keyboard: en-us
+      language: en
+      max_workers: 3
+      migration_unsecure: 0
+      ha: shutdown_policy=failover
+    marker: "# {mark} ANSIBLE MANAGED — DATACENTER CONFIG"
+  run_once: true    # Only needs to run on one node — pmxcfs replicates it
+
+- name: Create Ansible API user in Proxmox
+  ansible.builtin.command:
+    cmd: >
+      pveum user add {{ proxmox_api_user }}@pam
+      --comment "Ansible automation user"
+  register: pveum_user
+  changed_when: pveum_user.rc == 0
+  failed_when:
+    - pveum_user.rc != 0
+    - "'already exists' not in pveum_user.stderr"
+  run_once: true
+
+- name: Grant Ansible API user Administrator role
+  ansible.builtin.command:
+    cmd: >
+      pveum aclmod /
+      --users {{ proxmox_api_user }}@pam
+      --roles Administrator
+  run_once: true
+  changed_when: true
+
+- name: Create Ansible API token
+  ansible.builtin.command:
+    cmd: >
+      pveum user token add {{ proxmox_api_user }}@pam ansible
+      --privsep 0
+      --comment "Ansible automation token"
+  register: api_token
+  changed_when: api_token.rc == 0
+  failed_when:
+    - api_token.rc != 0
+    - "'already exists' not in api_token.stderr"
+  run_once: true
+
+- name: Display API token (save this — shown only once)
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Proxmox API token created. Save this to vault.yml now.
+      It will NOT be shown again.
+
+      {{ api_token.stdout }}
+
+      Add to vault.yml as:
+        vault_proxmox_api_token_id: "{{ proxmox_api_user }}@pam!ansible"
+        vault_proxmox_api_token_secret: "<value from above>"
+      ============================================================
+  when: api_token.changed
+  run_once: true
+
+- name: Configure HA groups for critical VMs
+  ansible.builtin.command:
+    cmd: >
+      ha-manager groupadd security-stack
+      --nodes amdpve:2,n1minipve:1
+      --comment "Security stack VMs prefer AMDPVE"
+  register: ha_group
+  changed_when: ha_group.rc == 0
+  failed_when:
+    - ha_group.rc != 0
+    - "'already exists' not in ha_group.stderr"
+  run_once: true
+
+- name: Set cluster-wide CPU governor to performance
+  ansible.builtin.shell:
+    cmd: |
+      for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+        echo performance > $cpu
+      done
+  changed_when: true
+
+- name: Make CPU governor persistent across reboots
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/cpu-performance-governor.service
+    content: |
+      [Unit]
+      Description=Set CPU governor to performance
+      After=multi-user.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/bash -c 'for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo performance > $f; done'
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: '0644'
+
+- name: Enable CPU governor service
+  ansible.builtin.systemd:
+    name: cpu-performance-governor.service
+    enabled: yes
+    state: started
+    daemon_reload: yes

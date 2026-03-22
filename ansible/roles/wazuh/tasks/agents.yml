@@ -1,0 +1,88 @@
+---
+# ansible/roles/wazuh/tasks/agents.yml
+# Deploy and register Wazuh agents on all non-manager lab hosts
+# Agent auto-enrolls with the manager using the enrollment port (1515)
+#
+# Hosts receiving agents:
+#   - k3s-cp (Pi 4)
+#   - k3s-w1 (Pi 5)
+#   - k3s-w2-amd (AMDPVE VM)
+#   - amdpve (Proxmox host itself)
+#   - n1minipve (Proxmox host itself)
+#   - gitea LXC
+
+- name: Check if Wazuh agent is already installed
+  ansible.builtin.stat:
+    path: /var/ossec/bin/wazuh-agentd
+  register: agent_installed
+
+- name: Add Wazuh GPG key
+  ansible.builtin.get_url:
+    url: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+    dest: /usr/share/keyrings/wazuh.gpg
+    mode: '0644'
+  when: not agent_installed.stat.exists
+
+- name: Add Wazuh APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+    filename: wazuh
+    state: present
+  when: not agent_installed.stat.exists
+
+- name: Install Wazuh agent
+  ansible.builtin.apt:
+    name: "wazuh-agent={{ wazuh_version }}-*"
+    state: present
+    update_cache: yes
+  when: not agent_installed.stat.exists
+
+- name: Configure Wazuh agent — set manager IP
+  ansible.builtin.lineinfile:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '<address>MANAGER_IP</address>'
+    line: "    <address>{{ wazuh_manager_ip }}</address>"
+
+- name: Configure Wazuh agent — set agent name
+  ansible.builtin.lineinfile:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '<client_name>.*</client_name>'
+    line: "    <client_name>{{ inventory_hostname }}</client_name>"
+
+- name: Register agent with Wazuh manager via enrollment
+  ansible.builtin.command:
+    cmd: >
+      /var/ossec/bin/agent-auth
+      -m {{ wazuh_manager_ip }}
+      -A {{ inventory_hostname }}
+      -P {{ vault_wazuh_enrollment_password }}
+  register: agent_auth
+  changed_when: agent_auth.rc == 0
+  failed_when:
+    - agent_auth.rc != 0
+    - "'already registered' not in agent_auth.stderr | default('')"
+  no_log: true
+  when: not agent_installed.stat.exists
+
+- name: Enable and start Wazuh agent
+  ansible.builtin.systemd:
+    name: wazuh-agent
+    enabled: yes
+    state: started
+
+- name: Wait for agent to connect to manager
+  ansible.builtin.wait_for:
+    host: "{{ wazuh_manager_ip }}"
+    port: 1514
+    delay: 3
+    timeout: 30
+
+- name: Confirm agent is running
+  ansible.builtin.command:
+    cmd: /var/ossec/bin/wazuh-control status
+  register: agent_status
+  changed_when: false
+
+- name: Display agent status
+  ansible.builtin.debug:
+    msg: "{{ agent_status.stdout_lines }}"

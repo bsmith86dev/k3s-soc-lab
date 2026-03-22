@@ -1,0 +1,14 @@
+---
+# ansible/roles/wazuh/defaults/main.yml
+
+wazuh_version: "4.9.0"
+wazuh_manager_host: "wazuh-vm"
+wazuh_manager_ip: "10.0.40.10"
+
+# Active response — start disabled, enable after validating alerts
+wazuh_active_response_enabled: false
+wazuh_block_timeout: 600    # Seconds to block an IP (10 minutes)
+
+# Secrets from vault.yml:
+#   vault_wazuh_enrollment_password   — agents use this to self-enroll
+#   vault_wazuh_api_password          — Wazuh REST API password

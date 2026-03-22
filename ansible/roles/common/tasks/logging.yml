@@ -1,0 +1,58 @@
+---
+# ansible/roles/common/tasks/logging.yml
+# Centralized syslog forwarding to Wazuh + local log retention config
+# All hosts ship logs to Wazuh manager on VLAN 40 (10.0.40.10)
+
+- name: Install rsyslog
+  ansible.builtin.apt:
+    name: rsyslog
+    state: present
+
+- name: Configure rsyslog to forward to Wazuh
+  ansible.builtin.blockinfile:
+    path: /etc/rsyslog.d/60-wazuh-forward.conf
+    create: yes
+    block: |
+      # Forward all logs to Wazuh manager
+      # Wazuh ingests these via its syslog input on port 514
+      *.* @{{ wazuh_manager_ip }}:514
+    marker: "# {mark} ANSIBLE MANAGED — WAZUH FORWARDING"
+  notify: restart rsyslog
+
+- name: Configure local log retention
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/lab-common
+    content: |
+      /var/log/auth.log
+      /var/log/syslog
+      /var/log/kern.log
+      /var/log/ufw.log {
+          daily
+          rotate 30
+          compress
+          delaycompress
+          missingok
+          notifempty
+          sharedscripts
+          postrotate
+              /usr/lib/rsyslog/rsyslog-rotate
+          endscript
+      }
+    mode: '0644'
+
+- name: Ensure log directories exist with correct permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: adm
+    mode: '0750'
+  loop:
+    - /var/log/audit
+    - /var/log/lab
+
+- name: Enable and start rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    enabled: yes
+    state: started

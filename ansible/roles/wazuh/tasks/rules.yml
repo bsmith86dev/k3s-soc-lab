@@ -1,0 +1,180 @@
+---
+# ansible/roles/wazuh/tasks/rules.yml
+# Deploy custom Wazuh detection rules to the manager
+# These rules are your portfolio-grade detection content
+#
+# Rule files are deployed to /var/ossec/etc/rules/
+# Wazuh loads all .xml files from this directory on restart
+#
+# Rule ID ranges (Wazuh convention):
+#   100000-109999 — Custom local rules
+#   We use: 100100+ for lab-specific detections
+
+- name: Deploy SSH brute force detection rule
+  ansible.builtin.copy:
+    dest: /var/ossec/etc/rules/lab-ssh-bruteforce.xml
+    content: |
+      <!-- Lab: SSH Brute Force Detection -->
+      <!-- Maps to MITRE ATT&CK T1110 — Brute Force -->
+      <group name="lab,ssh,bruteforce,">
+        <rule id="100100" level="10" frequency="6" timeframe="120">
+          <if_matched_sid>5760</if_matched_sid>
+          <same_source_ip />
+          <description>SSH brute force attack: 6+ failed logins in 120 seconds from same IP</description>
+          <mitre>
+            <id>T1110</id>
+          </mitre>
+          <group>attack,authentication_failures,pci_dss_10.2.4,pci_dss_10.2.5,gdpr_IV_35.7.d,hipaa_164.312.b,nist_800_53_AU.14,nist_800_53_AC.7,tsc_CC6.1,tsc_CC6.8,tsc_CC7.2,tsc_CC7.3,</group>
+        </rule>
+      </group>
+    mode: '0660'
+    owner: root
+    group: wazuh
+  notify: restart wazuh-manager
+
+- name: Deploy lateral movement detection rule
+  ansible.builtin.copy:
+    dest: /var/ossec/etc/rules/lab-lateral-movement.xml
+    content: |
+      <!-- Lab: Lateral Movement Detection -->
+      <!-- Maps to MITRE ATT&CK T1021 — Remote Services -->
+      <group name="lab,lateral_movement,">
+        <rule id="100200" level="12">
+          <if_sid>5501</if_sid>
+          <srcip>!10.0.10.0/24</srcip>
+          <dstport>22</dstport>
+          <description>SSH connection attempt from non-MGMT VLAN — possible lateral movement</description>
+          <mitre>
+            <id>T1021.004</id>
+          </mitre>
+          <group>attack,</group>
+        </rule>
+
+        <rule id="100201" level="10">
+          <if_sid>5715</if_sid>
+          <match>Accepted publickey</match>
+          <srcip>!10.0.10.0/24</srcip>
+          <description>SSH key auth from unexpected source VLAN</description>
+          <mitre>
+            <id>T1021.004</id>
+          </mitre>
+          <group>authentication_success,</group>
+        </rule>
+      </group>
+    mode: '0660'
+    owner: root
+    group: wazuh
+  notify: restart wazuh-manager
+
+- name: Deploy privilege escalation detection rule
+  ansible.builtin.copy:
+    dest: /var/ossec/etc/rules/lab-privesc.xml
+    content: |
+      <!-- Lab: Privilege Escalation Detection -->
+      <!-- Maps to MITRE ATT&CK T1548.003 — Sudo -->
+      <group name="lab,privesc,">
+        <rule id="100300" level="12">
+          <if_sid>5402</if_sid>
+          <match>sudo</match>
+          <description>Sudo command executed — possible privilege escalation attempt</description>
+          <mitre>
+            <id>T1548.003</id>
+          </mitre>
+          <group>attack,</group>
+        </rule>
+
+        <rule id="100301" level="14">
+          <if_sid>5402</if_sid>
+          <match>sudo: pam_unix</match>
+          <match>authentication failure</match>
+          <description>Failed sudo authentication — privilege escalation attempt blocked</description>
+          <mitre>
+            <id>T1548.003</id>
+          </mitre>
+          <group>attack,authentication_failures,</group>
+        </rule>
+      </group>
+    mode: '0660'
+    owner: root
+    group: wazuh
+  notify: restart wazuh-manager
+
+- name: Deploy new user/group creation detection rule
+  ansible.builtin.copy:
+    dest: /var/ossec/etc/rules/lab-persistence.xml
+    content: |
+      <!-- Lab: Persistence Detection -->
+      <!-- Maps to MITRE ATT&CK T1136 — Create Account -->
+      <group name="lab,persistence,">
+        <rule id="100400" level="12">
+          <if_sid>5902</if_sid>
+          <description>New user account created on lab system</description>
+          <mitre>
+            <id>T1136.001</id>
+          </mitre>
+          <group>attack,adduser,</group>
+        </rule>
+
+        <rule id="100401" level="10">
+          <if_sid>5903</if_sid>
+          <description>User added to privileged group (sudo/wheel/adm)</description>
+          <group>attack,adduser,</group>
+        </rule>
+
+        <rule id="100402" level="12">
+          <if_sid>592</if_sid>
+          <description>New cron job created — possible persistence mechanism</description>
+          <mitre>
+            <id>T1053.003</id>
+          </mitre>
+          <group>attack,</group>
+        </rule>
+      </group>
+    mode: '0660'
+    owner: root
+    group: wazuh
+  notify: restart wazuh-manager
+
+- name: Deploy UFW block event detection rule
+  ansible.builtin.copy:
+    dest: /var/ossec/etc/rules/lab-network.xml
+    content: |
+      <!-- Lab: Network Anomaly Detection -->
+      <group name="lab,network,">
+        <rule id="100500" level="8" frequency="10" timeframe="60">
+          <if_matched_sid>4151</if_matched_sid>
+          <same_source_ip />
+          <description>Multiple UFW blocks from same IP — possible port scan</description>
+          <mitre>
+            <id>T1046</id>
+          </mitre>
+          <group>attack,recon,</group>
+        </rule>
+
+        <rule id="100501" level="10">
+          <if_sid>4151</if_sid>
+          <dstport>22|3389|445|135|139</dstport>
+          <description>UFW blocked connection to sensitive port from external source</description>
+          <mitre>
+            <id>T1046</id>
+          </mitre>
+          <group>attack,recon,</group>
+        </rule>
+      </group>
+    mode: '0660'
+    owner: root
+    group: wazuh
+  notify: restart wazuh-manager
+
+- name: Validate Wazuh rule syntax
+  ansible.builtin.command:
+    cmd: /var/ossec/bin/wazuh-logtest -t
+  register: rule_validation
+  changed_when: false
+  failed_when:
+    - rule_validation.rc != 0
+    - "'ERROR' in rule_validation.stderr"
+
+- name: Display rule validation result
+  ansible.builtin.debug:
+    msg: "Rule validation: {{ 'PASSED' if rule_validation.rc == 0 else 'FAILED — check output' }}"

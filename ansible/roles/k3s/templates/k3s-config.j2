@@ -1,0 +1,48 @@
+# ansible/roles/k3s/templates/k3s-config.j2
+# k3s configuration file — rendered per node based on k3s_mode variable
+# Deployed to /etc/rancher/k3s/config.yaml before k3s install
+
+{% if k3s_mode == 'server' %}
+# ── Server (control plane) config ─────────────────────────────────────────
+cluster-init: true
+token: "{{ vault_k3s_token }}"
+node-ip: "{{ ansible_host }}"
+advertise-address: "{{ ansible_host }}"
+tls-san:
+  - "{{ ansible_host }}"
+  - "k3s-cp.lab.blerdmh.local"
+  - "k3s-cp"
+
+# Disable built-in components — using MetalLB + Traefik from manifests
+disable:
+  - traefik
+  - servicelb
+
+# Networking
+flannel-backend: host-gw
+cluster-cidr: "{{ k3s_cluster_cidr }}"
+service-cidr: "{{ k3s_service_cidr }}"
+cluster-dns: "{{ k3s_cluster_dns }}"
+
+# Logging
+log: /var/log/k3s.log
+
+# Kubelet extra args
+kubelet-arg:
+  - "max-pods=110"
+  - "eviction-hard=memory.available<100Mi,nodefs.available<10%"
+
+{% elif k3s_mode == 'agent' %}
+# ── Agent (worker) config ─────────────────────────────────────────────────
+server: "https://{{ k3s_server_ip }}:6443"
+token: "{{ vault_k3s_token }}"
+node-ip: "{{ ansible_host }}"
+
+# Kubelet extra args
+kubelet-arg:
+  - "max-pods=110"
+{% if has_amd_gpu | default(false) | bool %}
+  - "feature-gates=DevicePlugins=true"
+{% endif %}
+
+{% endif %}

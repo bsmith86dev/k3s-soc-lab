@@ -1,0 +1,64 @@
+---
+# ansible/inventory/group_vars/all/vault.yml
+# This file must be encrypted with ansible-vault before committing
+#
+# To encrypt:
+#   ansible-vault encrypt ansible/inventory/group_vars/all/vault.yml
+#
+# To edit:
+#   ansible-vault edit ansible/inventory/group_vars/all/vault.yml
+#
+# To run playbooks with vault:
+#   ansible-playbook ... --ask-vault-pass
+#   # or store password in ~/.vault_pass (chmod 600, add to .gitignore)
+
+# pfSense credentials
+vault_pfsense_password: "CHANGEME"
+
+# MAC addresses for DHCP reservations
+# Get with: ip link show | grep ether   (on Linux)
+# Or check Proxmox web UI node summary
+vault_skynet_mac: "AA:BB:CC:DD:EE:FF"
+vault_amdpve_mac: "AA:BB:CC:DD:EE:FF"
+vault_n1mini_mac: "AA:BB:CC:DD:EE:FF"
+vault_zimaboard_mac: "AA:BB:CC:DD:EE:FF"
+vault_pi4_mac: "AA:BB:CC:DD:EE:FF"
+vault_pi5_mac: "AA:BB:CC:DD:EE:FF"
+
+# Proxmox API tokens (generated in Proxmox UI)
+# Datacenter → Permissions → API Tokens
+vault_proxmox_api_token_id: "ansible@pam!ansible"
+vault_proxmox_api_token_secret: "CHANGEME"
+
+# k3s join token (auto-generated on first run, or set manually)
+vault_k3s_token: "CHANGEME"
+
+# Tailscale auth key (generate at https://login.tailscale.com/admin/settings/keys)
+# Use ephemeral + reusable key for Ansible automation
+vault_tailscale_auth_key: "tskey-auth-CHANGEME"
+
+# Cloudflare API token (for cert-manager DNS-01 challenge)
+# Permissions: Zone:DNS:Edit for blerdmh.com
+vault_cloudflare_api_token: "CHANGEME"
+
+# Gitea admin credentials
+vault_gitea_admin_password: "CHANGEME"
+vault_gitea_secret_key: "CHANGEME"
+
+# TrueNAS API key (generated in TrueNAS UI)
+# System → API Keys
+vault_truenas_api_key: "CHANGEME"
+
+# Wazuh credentials
+vault_wazuh_enrollment_password: "CHANGEME"   # Agents use this to self-enroll
+vault_wazuh_api_password: "CHANGEME"          # Wazuh REST API password
+
+# Proxmox Backup Server
+vault_pbs_host: "10.0.20.30"
+vault_pbs_user: "ansible@pbs"
+vault_pbs_password: "CHANGEME"
+vault_pbs_datastore: "lab-backups"
+vault_pbs_fingerprint: "CHANGEME"    # Get from PBS UI: Dashboard → Fingerprint
+
+# LXC containers root password
+vault_lxc_root_password: "CHANGEME"

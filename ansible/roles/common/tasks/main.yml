@@ -1,0 +1,39 @@
+---
+# ansible/roles/common/tasks/main.yml
+# Baseline configuration applied to ALL Linux hosts in the lab
+# Runs first in every play — establishes a consistent, hardened foundation
+#
+# Hosts covered: k3s-cp, k3s-w1, AMDPVE, N1 Mini, TrueNAS (limited)
+# Run order matters — do not reorder imports
+
+- name: Configure system settings
+  import_tasks: system.yml
+  tags: [common, system]
+
+- name: Install baseline packages
+  import_tasks: packages.yml
+  tags: [common, packages]
+
+- name: Configure SSH hardening
+  import_tasks: ssh.yml
+  tags: [common, ssh]
+
+- name: Configure UFW firewall
+  import_tasks: ufw.yml
+  tags: [common, ufw]
+
+- name: Configure fail2ban
+  import_tasks: fail2ban.yml
+  tags: [common, fail2ban]
+
+- name: Configure unattended upgrades
+  import_tasks: upgrades.yml
+  tags: [common, upgrades]
+
+- name: Configure NTP / time sync
+  import_tasks: ntp.yml
+  tags: [common, ntp]
+
+- name: Configure system logging
+  import_tasks: logging.yml
+  tags: [common, logging]

@@ -1,0 +1,128 @@
+---
+# ansible/roles/security/tasks/suricata.yml
+# Install and configure Suricata IDS on ids-vm (10.0.40.11)
+#
+# Mode: AF_PACKET on the monitoring interface
+# The ids-vm needs a second NIC in promiscuous mode to see traffic
+# Configure in Proxmox: add a second vNIC to ids-vm with no VLAN tag
+# and set the physical interface to span/mirror in the switch
+#
+# Logs ship to Wazuh via the Wazuh agent (agents.yml)
+# EVE JSON log is the primary output — feeds into Wazuh + Grafana
+
+- name: Add Suricata OISF PPA
+  ansible.builtin.apt_repository:
+    repo: ppa:oisf/suricata-stable
+    state: present
+    update_cache: yes
+
+- name: Install Suricata
+  ansible.builtin.apt:
+    name: suricata
+    state: present
+
+- name: Update Suricata rules with suricata-update
+  ansible.builtin.command:
+    cmd: suricata-update
+  register: suricata_update
+  changed_when: true
+
+- name: Enable Emerging Threats Open ruleset
+  ansible.builtin.command:
+    cmd: suricata-update enable-source et/open
+  register: et_enable
+  changed_when: et_enable.rc == 0
+  failed_when:
+    - et_enable.rc != 0
+    - "'already enabled' not in et_enable.stdout"
+
+- name: Deploy Suricata config
+  ansible.builtin.template:
+    src: suricata.yaml.j2
+    dest: /etc/suricata/suricata.yaml
+    owner: root
+    group: suricata
+    mode: '0640'
+    validate: 'suricata -T -c %s'
+  notify: restart suricata
+
+- name: Create Suricata log directory
+  ansible.builtin.file:
+    path: /var/log/suricata
+    state: directory
+    owner: suricata
+    group: suricata
+    mode: '0750'
+
+- name: Configure logrotate for Suricata EVE logs
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/suricata
+    content: |
+      /var/log/suricata/*.log /var/log/suricata/*.json {
+          daily
+          rotate 30
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0640 suricata suricata
+          sharedscripts
+          postrotate
+              /bin/kill -HUP $(cat /var/run/suricata.pid 2>/dev/null) 2>/dev/null || true
+          endscript
+      }
+    mode: '0644'
+
+- name: Enable and start Suricata
+  ansible.builtin.systemd:
+    name: suricata
+    enabled: yes
+    state: started
+
+- name: Create systemd timer for daily rule updates
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/suricata-update.timer
+    content: |
+      [Unit]
+      Description=Daily Suricata rule update
+
+      [Timer]
+      OnCalendar=daily
+      RandomizedDelaySec=1h
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+    mode: '0644'
+
+- name: Create suricata-update service unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/suricata-update.service
+    content: |
+      [Unit]
+      Description=Suricata rule update
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/suricata-update
+      ExecStartPost=/bin/systemctl reload suricata
+    mode: '0644'
+  notify: reload systemd
+
+- name: Enable Suricata update timer
+  ansible.builtin.systemd:
+    name: suricata-update.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Verify Suricata is running
+  ansible.builtin.command:
+    cmd: suricatasc -c uptime
+  register: suricata_status
+  changed_when: false
+  failed_when: false
+
+- name: Display Suricata status
+  ansible.builtin.debug:
+    msg: "{{ suricata_status.stdout_lines | default(['Suricata status check failed — may still be starting']) }}"

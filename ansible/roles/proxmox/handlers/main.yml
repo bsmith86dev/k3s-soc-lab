@@ -1,0 +1,53 @@
+---
+# ansible/roles/proxmox/handlers/main.yml
+# Triggered by notify: in proxmox tasks
+
+- name: Restart pveproxy
+  ansible.builtin.service:
+    name: pveproxy
+    state: restarted
+  listen: "restart pveproxy"
+
+- name: Restart pvedaemon
+  ansible.builtin.service:
+    name: pvedaemon
+    state: restarted
+  listen: "restart pvedaemon"
+
+- name: Restart pvestatd
+  ansible.builtin.service:
+    name: pvestatd
+    state: restarted
+  listen: "restart pvestatd"
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  listen: "reload systemd"
+
+- name: Update initramfs
+  ansible.builtin.command:
+    cmd: update-initramfs -u -k all
+  listen: "update initramfs"
+
+- name: Reboot host
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+    msg: "Ansible triggered reboot — Proxmox kernel or IOMMU config changed"
+  listen: "reboot host"
+
+- name: Update GRUB
+  ansible.builtin.command:
+    cmd: update-grub
+  listen: "update grub"
+
+- name: Reload network interfaces
+  ansible.builtin.command:
+    cmd: ifreload -a
+  listen: "reload network interfaces"
+
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+  listen: "restart fail2ban"

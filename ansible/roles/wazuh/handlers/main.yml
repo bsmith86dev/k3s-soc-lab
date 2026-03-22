@@ -1,0 +1,27 @@
+---
+# ansible/roles/wazuh/handlers/main.yml
+# Triggered by notify: in wazuh tasks
+
+- name: Restart wazuh-manager
+  ansible.builtin.service:
+    name: wazuh-manager
+    state: restarted
+  listen: "restart wazuh-manager"
+
+- name: Restart wazuh-agent
+  ansible.builtin.service:
+    name: wazuh-agent
+    state: restarted
+  listen: "restart wazuh-agent"
+
+- name: Restart wazuh-dashboard
+  ansible.builtin.service:
+    name: wazuh-dashboard
+    state: restarted
+  listen: "restart wazuh-dashboard"
+
+- name: Restart filebeat
+  ansible.builtin.service:
+    name: filebeat
+    state: restarted
+  listen: "restart filebeat"

@@ -1,0 +1,27 @@
+---
+# ansible/roles/gitea/handlers/main.yml
+# Triggered by notify: in gitea tasks
+
+- name: Restart gitea
+  ansible.builtin.service:
+    name: gitea
+    state: restarted
+  listen: "restart gitea"
+
+- name: Reload gitea
+  ansible.builtin.service:
+    name: gitea
+    state: reloaded
+  listen: "reload gitea"
+
+- name: Restart nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+  listen: "restart nginx"
+
+- name: Reload nginx
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+  listen: "reload nginx"

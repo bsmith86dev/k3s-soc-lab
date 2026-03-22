@@ -1,0 +1,60 @@
+---
+# ansible/roles/gitea/tasks/mirror.yml
+# Configure Gitea as a mirror of the GitHub blerdmh-lab repo
+# Mirrors pull from GitHub on a schedule — gives you an offline-capable copy
+#
+# Prerequisites:
+#   - Gitea running and admin user created (install.yml + configure.yml done)
+#   - vault_gitea_github_token set in vault.yml (GitHub PAT with repo:read scope)
+#   - GitHub repo exists: github.com/<your-user>/blerdmh-lab
+
+- name: Check if mirror repo already exists in Gitea
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ gitea_http_port }}/api/v1/repos/{{ gitea_admin_user }}/blerdmh-lab"
+    method: GET
+    user: "{{ gitea_admin_user }}"
+    password: "{{ vault_gitea_admin_password }}"
+    force_basic_auth: yes
+    status_code: [200, 404]
+  register: mirror_check
+  no_log: true
+
+- name: Create GitHub mirror repo in Gitea
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ gitea_http_port }}/api/v1/repos/migrate"
+    method: POST
+    user: "{{ gitea_admin_user }}"
+    password: "{{ vault_gitea_admin_password }}"
+    force_basic_auth: yes
+    body_format: json
+    body:
+      clone_addr: "https://github.com/{{ gitea_github_user }}/blerdmh-lab.git"
+      auth_token: "{{ vault_gitea_github_token }}"
+      uid: 1
+      repo_name: "blerdmh-lab"
+      mirror: true
+      mirror_interval: "{{ gitea_mirror_interval }}"
+      private: true
+      description: "Mirror of github.com/{{ gitea_github_user }}/blerdmh-lab"
+    status_code: [201]
+  when: mirror_check.status == 404
+  no_log: true
+
+- name: Trigger immediate mirror sync
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ gitea_http_port }}/api/v1/repos/{{ gitea_admin_user }}/blerdmh-lab/mirror-sync"
+    method: POST
+    user: "{{ gitea_admin_user }}"
+    password: "{{ vault_gitea_admin_password }}"
+    force_basic_auth: yes
+    status_code: [200]
+  when: mirror_check.status == 404
+  no_log: true
+
+- name: Confirm mirror is configured
+  ansible.builtin.debug:
+    msg: >
+      Gitea mirror configured.
+      Local: http://{{ ansible_host }}:{{ gitea_http_port }}/{{ gitea_admin_user }}/blerdmh-lab
+      Source: https://github.com/{{ gitea_github_user }}/blerdmh-lab
+      Sync interval: {{ gitea_mirror_interval }}

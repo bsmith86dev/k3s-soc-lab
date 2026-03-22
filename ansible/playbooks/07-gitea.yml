@@ -1,0 +1,19 @@
+---
+# ansible/playbooks/07-gitea.yml
+# Deploy self-hosted Gitea on N1 Mini LXC (VMID 302)
+#
+# Prerequisites:
+#   - LXC 302 provisioned and running (05-proxmox.yml --tags lxc)
+#   - LXC reachable at 10.0.10.50 via SSH
+#   - vault_gitea_admin_password, vault_gitea_secret_key,
+#     vault_gitea_github_token set in vault.yml
+#   - GitHub repo exists at github.com/<user>/blerdmh-lab
+
+- name: Deploy Gitea on N1 Mini LXC
+  hosts: gitea
+  become: yes
+  gather_facts: yes
+  roles:
+    - gitea
+  tags:
+    - gitea

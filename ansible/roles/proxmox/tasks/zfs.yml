@@ -1,0 +1,133 @@
+---
+# ansible/roles/proxmox/tasks/zfs.yml
+# Configure local ZFS storage on Proxmox nodes
+#
+# This task does NOT create pools — pool creation requires knowing
+# exact disk device names which vary per physical machine and must
+# be confirmed before running to avoid data loss.
+#
+# Pool creation is manual (one-time):
+#   AMDPVE:  zpool create -f -o ashift=12 local-nvme /dev/nvme0n1
+#   N1 Mini: zpool create -f -o ashift=12 local-nvme /dev/nvme0n1
+#
+# This task handles everything after the pool exists:
+#   - ZFS dataset structure for VM/LXC storage
+#   - ZFS tuning for Proxmox workloads
+#   - Register the pool as a Proxmox storage backend
+#   - Snapshot scheduling via systemd timer
+
+- name: Check if local-nvme pool exists
+  ansible.builtin.command:
+    cmd: zpool list local-nvme
+  register: zpool_check
+  changed_when: false
+  failed_when: false
+
+- name: Abort if pool does not exist
+  ansible.builtin.fail:
+    msg: >
+      ZFS pool 'local-nvme' not found on {{ inventory_hostname }}.
+      Create it manually first:
+        zpool create -f -o ashift=12 local-nvme /dev/nvme0n1
+      Then re-run with --tags zfs
+  when: zpool_check.rc != 0
+
+- name: Create VM disk dataset
+  community.general.zfs:
+    name: local-nvme/vm-disks
+    state: present
+    extra_zfs_properties:
+      compression: lz4
+      atime: "off"
+      relatime: "off"
+      xattr: sa
+      dnodesize: auto
+      recordsize: "64k"    # Optimal for VM block I/O
+
+- name: Create LXC dataset
+  community.general.zfs:
+    name: local-nvme/lxc
+    state: present
+    extra_zfs_properties:
+      compression: lz4
+      atime: "off"
+      xattr: sa
+      dnodesize: auto
+      recordsize: "16k"    # Smaller record size for LXC mixed I/O
+
+- name: Create ISO/templates dataset
+  community.general.zfs:
+    name: local-nvme/iso
+    state: present
+    extra_zfs_properties:
+      compression: lz4
+      atime: "off"
+
+- name: Create snippets dataset (cloud-init, hook scripts)
+  community.general.zfs:
+    name: local-nvme/snippets
+    state: present
+    extra_zfs_properties:
+      compression: lz4
+      atime: "off"
+
+- name: Tune ZFS ARC for Proxmox workloads
+  ansible.builtin.blockinfile:
+    path: /etc/modprobe.d/zfs.conf
+    create: yes
+    block: |
+      # Limit ARC to 50% of RAM — leave headroom for VMs/LXCs
+      # Adjust zfs_arc_max per node based on total RAM
+      options zfs zfs_arc_max={{ proxmox_zfs_arc_max_bytes }}
+    marker: "# {mark} ANSIBLE MANAGED — ZFS ARC TUNING"
+  notify: update initramfs
+
+- name: Register local-nvme pool as Proxmox storage backend
+  ansible.builtin.command:
+    cmd: >
+      pvesm add zfspool local-nvme
+      --pool local-nvme
+      --blocksize 4k
+      --content images,rootdir
+      --nodes {{ inventory_hostname }}
+  register: pvesm_add
+  changed_when: pvesm_add.rc == 0
+  failed_when:
+    - pvesm_add.rc != 0
+    - "'already defined' not in pvesm_add.stderr"
+
+- name: Create ZFS snapshot timer — hourly VM snapshots
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/zfs-snapshot-hourly.timer
+    content: |
+      [Unit]
+      Description=ZFS Hourly Snapshot Timer
+
+      [Timer]
+      OnCalendar=hourly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+    mode: '0644'
+
+- name: Create ZFS snapshot service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/zfs-snapshot-hourly.service
+    content: |
+      [Unit]
+      Description=ZFS Hourly Snapshot
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/sbin/zfs snapshot -r local-nvme@hourly-{{ "$(date +%%Y%%m%%d-%%H%%M)" }}
+      ExecStartPost=/bin/bash -c 'zfs list -t snapshot -o name | grep "hourly-" | sort | head -n -24 | xargs -r zfs destroy'
+    mode: '0644'
+  notify: reload systemd
+
+- name: Enable and start ZFS snapshot timer
+  ansible.builtin.systemd:
+    name: zfs-snapshot-hourly.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes

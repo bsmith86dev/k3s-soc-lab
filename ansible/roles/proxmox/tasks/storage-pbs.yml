@@ -1,0 +1,54 @@
+---
+# ansible/roles/proxmox/tasks/storage-pbs.yml
+# Register Proxmox Backup Server as a storage backend
+#
+# PBS runs as an LXC or VM on one of the Proxmox nodes
+# and stores backups on the TrueNAS NFS mount (tank/backups)
+#
+# PBS connection details are stored in vault.yml:
+#   vault_pbs_host        — IP of PBS instance
+#   vault_pbs_user        — PBS user (e.g. ansible@pbs)
+#   vault_pbs_password    — PBS user password
+#   vault_pbs_datastore   — PBS datastore name
+#   vault_pbs_fingerprint — PBS TLS fingerprint (from PBS web UI)
+#
+# Get PBS fingerprint:
+#   On PBS host: proxmox-backup-manager cert info | grep Fingerprint
+
+- name: Check if PBS storage already registered
+  ansible.builtin.command:
+    cmd: pvesm list pbs-truenas
+  register: pbs_check
+  changed_when: false
+  failed_when: false
+
+- name: Register Proxmox Backup Server storage backend
+  ansible.builtin.command:
+    cmd: >
+      pvesm add pbs pbs-truenas
+      --server {{ vault_pbs_host }}
+      --datastore {{ vault_pbs_datastore }}
+      --username {{ vault_pbs_user }}
+      --password {{ vault_pbs_password }}
+      --fingerprint {{ vault_pbs_fingerprint }}
+      --content backup
+      --nodes {{ proxmox_cluster_nodes | join(',') }}
+      --prune-backups keep-last=3,keep-daily=7,keep-weekly=4,keep-monthly=3
+  register: pvesm_pbs
+  changed_when: pvesm_pbs.rc == 0
+  failed_when:
+    - pvesm_pbs.rc != 0
+    - "'already defined' not in pvesm_pbs.stderr"
+  when: pbs_check.rc != 0
+  no_log: true    # Suppress output — contains vault_pbs_password
+
+- name: Verify PBS storage is reachable
+  ansible.builtin.command:
+    cmd: pvesm status --storage pbs-truenas
+  register: pbs_status
+  changed_when: false
+  failed_when: false
+
+- name: Display PBS status
+  ansible.builtin.debug:
+    msg: "{{ pbs_status.stdout_lines }}"

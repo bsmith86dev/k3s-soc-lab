@@ -1,0 +1,63 @@
+---
+# ansible/playbooks/03-security.yml
+# Deploy security stack — Wazuh, Suricata/Zeek, OpenVAS
+#
+# Target VMs must already exist (provisioned via 05-proxmox.yml)
+# and be reachable via SSH before this playbook runs
+#
+# Run Wazuh manager FIRST — agents need it running before they enroll
+#
+# Step-by-step for first deployment:
+#   # 1. Deploy Wazuh manager only
+#   ansible-playbook -i inventory/hosts.yml playbooks/03-security.yml --tags wazuh,manager
+#
+#   # 2. Verify dashboard is up at https://10.0.40.10
+#
+#   # 3. Deploy agents to all hosts
+#   ansible-playbook -i inventory/hosts.yml playbooks/03-security.yml --tags wazuh,agents
+#
+#   # 4. Deploy IDS stack
+#   ansible-playbook -i inventory/hosts.yml playbooks/03-security.yml --tags security
+#
+#   # 5. Deploy OpenVAS
+#   ansible-playbook -i inventory/hosts.yml playbooks/03-security.yml --tags openvas
+
+- name: Deploy Wazuh manager
+  hosts: wazuh_manager
+  become: yes
+  gather_facts: yes
+  roles:
+    - wazuh
+  tags:
+    - wazuh
+
+- name: Deploy Wazuh agents to all lab hosts
+  hosts: linux_hosts
+  become: yes
+  gather_facts: yes
+  roles:
+    - wazuh
+  tags:
+    - wazuh
+    - agents
+
+- name: Deploy IDS/NSM stack
+  hosts: ids_vm
+  become: yes
+  gather_facts: yes
+  roles:
+    - security
+  tags:
+    - security
+    - ids
+
+- name: Deploy OpenVAS vulnerability scanner
+  hosts: openvas_vm
+  become: yes
+  gather_facts: yes
+  roles:
+    - security
+  tags:
+    - security
+    - openvas
+    - vuln-scan

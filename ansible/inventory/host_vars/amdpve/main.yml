@@ -1,0 +1,28 @@
+---
+# ansible/inventory/host_vars/amdpve/main.yml
+# Node-specific overrides for AMDPVE
+# Hardware: Ryzen 9 7900X, 128GB DDR5, RTX 5700 XT
+
+proxmox_nic: "enp5s0"              # Verify with: ip link show
+proxmox_mgmt_ip: "10.0.10.20"
+
+# 128GB RAM — ARC limit 64GB
+proxmox_zfs_arc_max_bytes: 68719476736
+
+# IOMMU enabled — RX 5700 XT passthrough to k3s-w2-amd VM
+proxmox_enable_iommu: true
+
+# Get the real PCI IDs before running iommu.yml:
+#   lspci -nn | grep -i amd | grep -i "VGA\|Audio"
+# Expected output format:
+#   XX:00.0 VGA compatible controller [0300]: Advanced Micro Devices [1002:731f]
+#   XX:00.1 Audio device [0403]: Advanced Micro Devices [1002:ab38]
+# Then set: proxmox_vfio_pci_ids: "1002:731f,1002:ab38"
+proxmox_vfio_pci_ids: ""           # FILL IN after running lspci
+
+# AMDPVE hosts security VMs and the GPU k3s worker
+# LXC provisioning is handled by N1 Mini (set false here)
+proxmox_provision_lxc: false
+
+# AMDPVE provisions all security stack VMs + k3s GPU worker
+proxmox_provision_vms: true

@@ -1,0 +1,29 @@
+---
+# ansible/roles/pfsense/tasks/main.yml
+# Manages pfSense firewall via the pfsensible.core Ansible collection
+#
+# Requirements:
+#   ansible-galaxy collection install pfsensible.core
+#
+# Target: pfSense CE (latest) on Glovary i3-N355 6-port firewall
+# Management IP: 10.0.10.1 (VLAN 10 - MGMT)
+
+- name: Include aliases tasks
+  import_tasks: aliases.yml
+  tags: [pfsense, aliases]
+
+- name: Include VLAN interface tasks
+  import_tasks: vlans.yml
+  tags: [pfsense, vlans]
+
+- name: Include firewall rules tasks
+  import_tasks: rules.yml
+  tags: [pfsense, rules]
+
+- name: Include DNS resolver tasks
+  import_tasks: dns.yml
+  tags: [pfsense, dns]
+
+- name: Include DHCP tasks
+  import_tasks: dhcp.yml
+  tags: [pfsense, dhcp]

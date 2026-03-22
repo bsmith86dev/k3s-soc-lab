@@ -1,0 +1,87 @@
+---
+# ansible/roles/proxmox/tasks/iommu.yml
+# Enable IOMMU and PCIe passthrough for AMD CPUs
+# Required for: RX 5700 XT passthrough to k3s-worker-amd VM on AMDPVE
+#
+# Prerequisites (manual — must be done before this task runs):
+#   - BIOS: AMD-Vi enabled
+#   - BIOS: IOMMU enabled
+#   - BIOS: ACS override enabled (if available)
+#
+# This task only runs on AMDPVE (proxmox_enable_iommu: true in host_vars)
+# After running, a reboot is required — handler triggers it automatically
+#
+# Verify after reboot:
+#   dmesg | grep -e DMAR -e IOMMU
+#   find /sys/kernel/iommu_groups/ -type l | sort -V | head -20
+
+- name: Check current GRUB cmdline
+  ansible.builtin.command:
+    cmd: grep -c "amd_iommu=on" /etc/default/grub
+  register: iommu_grub_check
+  changed_when: false
+  failed_when: false
+
+- name: Enable IOMMU in GRUB cmdline
+  ansible.builtin.replace:
+    path: /etc/default/grub
+    regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*)"'
+    replace: '\1 amd_iommu=on iommu=pt quiet"'
+  when: iommu_grub_check.stdout == "0"
+  notify:
+    - update grub
+    - reboot host
+
+- name: Update GRUB
+  ansible.builtin.command:
+    cmd: update-grub
+  when: iommu_grub_check.stdout == "0"
+
+- name: Ensure VFIO kernel modules load at boot
+  ansible.builtin.blockinfile:
+    path: /etc/modules-load.d/vfio.conf
+    create: yes
+    block: |
+      vfio
+      vfio_iommu_type1
+      vfio_pci
+    marker: "# {mark} ANSIBLE MANAGED — VFIO MODULES"
+
+- name: Blacklist AMD GPU drivers (prevent host from claiming the GPU)
+  ansible.builtin.blockinfile:
+    path: /etc/modprobe.d/blacklist-amdgpu.conf
+    create: yes
+    block: |
+      blacklist amdgpu
+      blacklist radeon
+    marker: "# {mark} ANSIBLE MANAGED — AMD GPU BLACKLIST"
+  notify: update initramfs
+
+- name: Configure VFIO PCI IDs for RX 5700 XT
+  ansible.builtin.blockinfile:
+    path: /etc/modprobe.d/vfio.conf
+    create: yes
+    block: |
+      # RX 5700 XT PCI IDs — verify with: lspci -nn | grep -i amd
+      # Format: options vfio-pci ids=XXXX:XXXX,XXXX:XXXX
+      # Replace with actual IDs from lspci output on AMDPVE
+      options vfio-pci ids={{ proxmox_vfio_pci_ids }}
+    marker: "# {mark} ANSIBLE MANAGED — VFIO PCI IDS"
+  when: proxmox_vfio_pci_ids is defined and proxmox_vfio_pci_ids | length > 0
+  notify: update initramfs
+
+- name: Update initramfs after VFIO changes
+  ansible.builtin.command:
+    cmd: update-initramfs -u -k all
+  changed_when: true
+
+- name: Verify IOMMU is active (post-reboot check)
+  ansible.builtin.shell:
+    cmd: dmesg | grep -i iommu | head -5
+  register: iommu_dmesg
+  changed_when: false
+  failed_when: false
+
+- name: Display IOMMU status
+  ansible.builtin.debug:
+    msg: "{{ iommu_dmesg.stdout_lines }}"

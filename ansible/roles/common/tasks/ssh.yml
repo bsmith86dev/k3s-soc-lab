@@ -1,0 +1,43 @@
+---
+# ansible/roles/common/tasks/ssh.yml
+# SSH hardening — applied to all lab Linux hosts
+# Uses template for full sshd_config management
+
+- name: Ensure .ssh directory exists for admin user
+  ansible.builtin.file:
+    path: "/home/{{ common_admin_user }}/.ssh"
+    state: directory
+    owner: "{{ common_admin_user }}"
+    group: "{{ common_admin_user }}"
+    mode: '0700'
+
+- name: Deploy authorized SSH public key
+  ansible.posix.authorized_key:
+    user: "{{ common_admin_user }}"
+    key: "{{ lookup('file', common_ssh_public_key_path) }}"
+    state: present
+    exclusive: "{{ common_ssh_exclusive_keys }}"
+
+- name: Deploy sshd_config from template
+  ansible.builtin.template:
+    src: sshd_config.j2
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0600'
+    validate: '/usr/sbin/sshd -t -f %s'
+  notify: restart sshd
+
+- name: Ensure SSH host keys exist
+  ansible.builtin.command:
+    cmd: ssh-keygen -A
+  changed_when: false
+
+- name: Remove weak SSH host key types
+  ansible.builtin.file:
+    path: "/etc/ssh/ssh_host_{{ item }}_key"
+    state: absent
+  loop:
+    - dsa
+    - ecdsa
+  notify: restart sshd

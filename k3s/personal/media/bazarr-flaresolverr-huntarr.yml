@@ -1,0 +1,212 @@
+---
+# k3s/personal/media/bazarr-flaresolverr-huntarr.yml
+# Bazarr      — subtitle management for Radarr + Sonarr
+# FlareSolverr — Cloudflare bypass proxy for Prowlarr indexers
+# Huntarr     — hunts for missing/cutoff content in Radarr + Sonarr
+
+# ── Bazarr ───────────────────────────────────────────────────────────────
+# Connects to:
+#   Radarr: http://radarr.media.svc.cluster.local:7878
+#   Sonarr: http://sonarr.media.svc.cluster.local:8989
+# Configure API keys in Bazarr Settings → Sonarr / Radarr
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bazarr
+  namespace: media
+  labels:
+    app: bazarr
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bazarr
+  template:
+    metadata:
+      labels:
+        app: bazarr
+    spec:
+      containers:
+        - name: bazarr
+          image: lscr.io/linuxserver/bazarr:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "America/Chicago"
+          ports:
+            - containerPort: 6767
+              name: http
+          volumeMounts:
+            - name: bazarr-config
+              mountPath: /config
+            - name: media-library
+              mountPath: /media
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: bazarr-config
+          persistentVolumeClaim:
+            claimName: bazarr-config-pvc
+        - name: media-library
+          persistentVolumeClaim:
+            claimName: media-library-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bazarr
+  namespace: media
+spec:
+  selector:
+    app: bazarr
+  ports:
+    - port: 6767
+      targetPort: 6767
+      name: http
+
+---
+# ── FlareSolverr ─────────────────────────────────────────────────────────
+# Cloudflare CAPTCHA/challenge bypass for Prowlarr indexers
+# Configure in Prowlarr: Settings → Indexers → Add Proxy
+#   Type: FlareSolverr
+#   URL:  http://flaresolverr.media.svc.cluster.local:8191
+#   Tag each Cloudflare-protected indexer with this proxy tag
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flaresolverr
+  namespace: media
+  labels:
+    app: flaresolverr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flaresolverr
+  template:
+    metadata:
+      labels:
+        app: flaresolverr
+    spec:
+      containers:
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:latest
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+            - name: LOG_HTML
+              value: "false"
+            - name: CAPTCHA_SOLVER
+              value: "none"
+            - name: TZ
+              value: "America/Chicago"
+          ports:
+            - containerPort: 8191
+              name: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: media
+spec:
+  selector:
+    app: flaresolverr
+  ports:
+    - port: 8191
+      targetPort: 8191
+      name: http
+
+---
+# ── Huntarr ───────────────────────────────────────────────────────────────
+# Hunts for missing episodes/movies and re-searches for quality upgrades
+# Connects to Radarr + Sonarr APIs
+# Configure via web UI after deploy
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: huntarr
+  namespace: media
+  labels:
+    app: huntarr
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: huntarr
+  template:
+    metadata:
+      labels:
+        app: huntarr
+    spec:
+      containers:
+        - name: huntarr
+          image: huntarr/huntarr:latest
+          env:
+            - name: TZ
+              value: "America/Chicago"
+            # Sonarr connection
+            - name: SONARR_URL
+              value: "http://sonarr.media.svc.cluster.local:8989"
+            - name: SONARR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arr-api-keys
+                  key: SONARR_API_KEY
+            # Radarr connection
+            - name: RADARR_URL
+              value: "http://radarr.media.svc.cluster.local:7878"
+            - name: RADARR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arr-api-keys
+                  key: RADARR_API_KEY
+          ports:
+            - containerPort: 9705
+              name: http
+          volumeMounts:
+            - name: huntarr-config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+      volumes:
+        - name: huntarr-config
+          persistentVolumeClaim:
+            claimName: huntarr-config-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: huntarr
+  namespace: media
+spec:
+  selector:
+    app: huntarr
+  ports:
+    - port: 9705
+      targetPort: 9705
+      name: http

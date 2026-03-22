@@ -1,0 +1,64 @@
+---
+# ansible/roles/common/tasks/ntp.yml
+# Time synchronization — critical for Wazuh log correlation and k3s TLS certs
+# Accurate time across all nodes is non-negotiable for a security lab
+
+- name: Install chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+
+- name: Remove systemd-timesyncd (conflicts with chrony)
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    enabled: no
+    state: stopped
+  ignore_errors: yes
+
+- name: Configure chrony NTP
+  ansible.builtin.copy:
+    dest: /etc/chrony/chrony.conf
+    content: |
+      # Use multiple NTP pools for redundancy
+      pool 0.pool.ntp.org iburst maxsources 2
+      pool 1.pool.ntp.org iburst maxsources 2
+      pool 2.pool.ntp.org iburst maxsources 2
+      pool 3.pool.ntp.org iburst maxsources 2
+
+      # Allow step correction on startup (important after power outage)
+      makestep 1.0 3
+
+      # Record clock drift
+      driftfile /var/lib/chrony/drift
+
+      # Log statistics
+      logdir /var/log/chrony
+      log tracking measurements statistics
+
+      # Allow only local network to query this as NTP server
+      # (useful if pfSense uses Proxmox nodes as NTP source)
+      allow 10.0.0.0/8
+    mode: '0644'
+  notify: restart chrony
+
+- name: Enable and start chrony
+  ansible.builtin.systemd:
+    name: chrony
+    enabled: yes
+    state: started
+
+- name: Force chrony time sync on first run
+  ansible.builtin.command:
+    cmd: chronyc makestep
+  changed_when: false
+  ignore_errors: yes
+
+- name: Verify time sync status
+  ansible.builtin.command:
+    cmd: chronyc tracking
+  register: chrony_status
+  changed_when: false
+
+- name: Display time sync status
+  ansible.builtin.debug:
+    msg: "{{ chrony_status.stdout_lines }}"

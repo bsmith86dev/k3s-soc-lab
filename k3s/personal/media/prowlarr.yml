@@ -1,0 +1,80 @@
+---
+# k3s/personal/media/prowlarr.yml
+# Prowlarr — unified indexer manager
+#
+# Prowlarr manages all indexers in one place and syncs them to
+# Radarr, Sonarr, Lidarr automatically. You configure indexers
+# once in Prowlarr — not separately in each ARR app.
+#
+# Prowlarr does NOT go through Gluetun — it only talks to ARR apps
+# and indexers over HTTPS. Download clients handle the VPN.
+#
+# FlareSolverr integration:
+#   Settings → Indexers → Add FlareSolverr proxy
+#   URL: http://flaresolverr.media.svc.cluster.local:8191
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prowlarr
+  namespace: media
+  labels:
+    app: prowlarr
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: prowlarr
+  template:
+    metadata:
+      labels:
+        app: prowlarr
+    spec:
+      containers:
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "America/Chicago"
+          ports:
+            - containerPort: 9696
+              name: http
+          volumeMounts:
+            - name: prowlarr-config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 9696
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: prowlarr-config
+          persistentVolumeClaim:
+            claimName: prowlarr-config-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr
+  namespace: media
+spec:
+  selector:
+    app: prowlarr
+  ports:
+    - port: 9696
+      targetPort: 9696
+      name: http

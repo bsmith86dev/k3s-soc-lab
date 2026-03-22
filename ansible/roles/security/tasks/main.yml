@@ -1,0 +1,25 @@
+---
+# ansible/roles/security/tasks/main.yml
+# Deploy IDS/IPS and vulnerability scanning stack on SECURITY VLAN VMs
+#
+# ids-vm (10.0.40.11):
+#   - Suricata IDS — inline inspection or span port capture
+#   - Zeek NSM     — deep protocol analysis + connection logs
+#
+# openvas-vm (10.0.40.12):
+#   - OpenVAS / Greenbone Vulnerability Manager — scheduled scanning
+
+- name: Install and configure Suricata
+  import_tasks: suricata.yml
+  tags: [security, suricata, ids]
+  when: "'ids' in group_names or inventory_hostname == 'ids-vm'"
+
+- name: Install and configure Zeek
+  import_tasks: zeek.yml
+  tags: [security, zeek, nsm]
+  when: "'ids' in group_names or inventory_hostname == 'ids-vm'"
+
+- name: Install and configure OpenVAS
+  import_tasks: openvas.yml
+  tags: [security, openvas, vuln-scan]
+  when: inventory_hostname == 'openvas-vm'

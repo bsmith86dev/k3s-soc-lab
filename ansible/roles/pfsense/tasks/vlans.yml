@@ -1,0 +1,84 @@
+---
+# ansible/roles/pfsense/tasks/vlans.yml
+# Ensures all VLAN interfaces exist and are correctly configured
+# Physical uplink: igb1 (LAN port connected to MokerLink trunk port 1)
+
+- name: Create VLAN 10 — MGMT (10.0.10.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 10
+    descr: "MGMT"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 20 — SERVERS (10.0.20.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 20
+    descr: "SERVERS"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 30 — CEPH_PUB (10.0.30.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 30
+    descr: "CEPH_PUB"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 31 — CEPH_CLUSTER (10.0.31.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 31
+    descr: "CEPH_CLUSTER"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 40 — SECURITY (10.0.40.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 40
+    descr: "SECURITY"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 50 — IOT_HONEYPOT (10.0.50.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 50
+    descr: "IOT_HONEYPOT"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 60 — PRODUCTION (10.0.60.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 60
+    descr: "PRODUCTION"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 61 — RED_TEAM (10.0.61.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 61
+    descr: "RED_TEAM"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 62 — PURPLE_LAB (10.0.62.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 62
+    descr: "PURPLE_LAB"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: Create VLAN 70 — GUEST_DMZ (10.0.70.0/24)
+  pfsensible.core.pfsense_vlan:
+    interface: igb1
+    vlan_id: 70
+    descr: "GUEST_DMZ"
+    state: present
+  delegate_to: "{{ pfsense_host }}"

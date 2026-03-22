@@ -1,0 +1,148 @@
+---
+# ansible/roles/proxmox/defaults/main.yml
+# Default variables for the proxmox role
+# Override per-node in ansible/inventory/host_vars/<hostname>.yml
+
+# ── General ───────────────────────────────────────────────────────────────
+
+proxmox_upgrade_packages: true
+proxmox_install_ceph: false          # Set true when Ceph cluster is ready
+
+# ── API connection ────────────────────────────────────────────────────────
+
+proxmox_api_host: "10.0.10.20"      # AMDPVE — primary node
+proxmox_api_user: "ansible"
+# proxmox_api_token_secret comes from vault.yml
+
+# All node hostnames as Proxmox knows them (pvecm nodes output)
+proxmox_cluster_nodes:
+  - amdpve
+  - n1minipve
+
+# ── Network ───────────────────────────────────────────────────────────────
+
+# Physical NIC connected to MokerLink — verify with: ip link show
+# Override in host_vars per node
+proxmox_nic: "enp5s0"               # AMDPVE default
+# proxmox_nic: "enp2s0"             # N1 Mini — set in host_vars/n1minipve.yml
+
+proxmox_mgmt_ip: ""                 # Set per node in host_vars
+proxmox_mgmt_gateway: "10.0.10.1"
+proxmox_mgmt_vlan: 10
+
+# ── Storage ───────────────────────────────────────────────────────────────
+
+truenas_ip: "10.0.20.5"
+
+# ZFS ARC max — 50% of node RAM in bytes
+# AMDPVE (128GB): 64GB = 68719476736
+# N1 Mini (16GB): 8GB  = 8589934592
+proxmox_zfs_arc_max_bytes: 68719476736   # Override in host_vars for N1 Mini
+
+proxmox_configure_zfs: true
+
+# ── IOMMU / PCIe passthrough ──────────────────────────────────────────────
+
+# Only enable on AMDPVE — set false in host_vars/n1minipve.yml
+proxmox_enable_iommu: false
+
+# RX 5700 XT PCI IDs — find with: lspci -nn | grep -i amd
+# Format: "1002:731f,1002:ab38"  (GPU + audio function)
+# Leave empty until confirmed from lspci output on AMDPVE
+proxmox_vfio_pci_ids: ""
+
+# ── VM template ───────────────────────────────────────────────────────────
+
+proxmox_vm_template_id: 9000        # Ubuntu 24.04 cloud-init template VMID
+
+# ── LXC containers to provision ───────────────────────────────────────────
+
+proxmox_provision_lxc: true
+
+proxmox_lxc_containers:
+  - vmid: 302
+    hostname: gitea
+    node: n1minipve
+    cores: 2
+    memory: 2048
+    disk: "20"
+    ip: "10.0.10.50"
+    description: "Self-hosted Gitea — GitHub mirror"
+    netif:
+      net0: "name=eth0,bridge=vmbr0,tag=10,ip=10.0.10.50/24,gw=10.0.10.1"
+    onboot: true
+    unprivileged: true
+
+  - vmid: 310
+    hostname: pbs
+    node: n1minipve
+    cores: 2
+    memory: 4096
+    disk: "20"
+    ip: "10.0.20.30"
+    description: "Proxmox Backup Server — stores backups on TrueNAS NFS"
+    netif:
+      net0: "name=eth0,bridge=vmbr0,tag=20,ip=10.0.20.30/24,gw=10.0.20.1"
+    onboot: true
+    unprivileged: false    # PBS requires privileged for backup operations
+
+# ── VMs to provision ─────────────────────────────────────────────────────
+
+proxmox_provision_vms: true
+
+proxmox_vms:
+  # Security stack — all on AMDPVE, SECURITY VLAN 40
+  - vmid: 400
+    name: wazuh-vm
+    node: amdpve
+    cores: 4
+    memory: 8192
+    disk_size: "80G"
+    vlan: 40
+    ip: "10.0.40.10"
+    gateway: "10.0.40.1"
+    description: "Wazuh Manager + Dashboard + OpenSearch"
+    tags: ["security", "wazuh", "siem"]
+    onboot: true
+
+  - vmid: 401
+    name: ids-vm
+    node: amdpve
+    cores: 4
+    memory: 8192
+    disk_size: "60G"
+    vlan: 40
+    ip: "10.0.40.11"
+    gateway: "10.0.40.1"
+    description: "Suricata IDS + Zeek NSM — span port monitoring"
+    tags: ["security", "ids", "zeek", "suricata"]
+    onboot: true
+
+  - vmid: 402
+    name: openvas-vm
+    node: amdpve
+    cores: 4
+    memory: 8192
+    disk_size: "60G"
+    vlan: 40
+    ip: "10.0.40.12"
+    gateway: "10.0.40.1"
+    description: "OpenVAS / Greenbone vulnerability scanner"
+    tags: ["security", "vuln-scan"]
+    onboot: true
+
+  # k3s worker VM on AMDPVE — AMD GPU passthrough for Jellyfin
+  # Note: PCIe passthrough config is applied separately after VM creation
+  # See: iommu.yml and proxmox_vfio_pci_ids variable
+  - vmid: 200
+    name: k3s-w2-amd
+    node: amdpve
+    cores: 8
+    memory: 16384
+    disk_size: "60G"
+    vlan: 20
+    ip: "10.0.20.12"
+    gateway: "10.0.20.1"
+    description: "k3s worker VM with AMD RX 5700 XT PCIe passthrough — Jellyfin VAAPI"
+    tags: ["k3s", "worker", "gpu"]
+    onboot: true

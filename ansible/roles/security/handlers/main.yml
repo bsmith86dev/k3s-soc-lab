@@ -1,0 +1,37 @@
+---
+# ansible/roles/security/handlers/main.yml
+# Triggered by notify: in security tasks (Suricata, Zeek, OpenVAS)
+
+- name: Restart suricata
+  ansible.builtin.service:
+    name: suricata
+    state: restarted
+  listen: "restart suricata"
+
+- name: Restart zeek
+  ansible.builtin.service:
+    name: zeek
+    state: restarted
+  listen: "restart zeek"
+
+- name: Restart gvmd
+  ansible.builtin.service:
+    name: gvmd
+    state: restarted
+  listen: "restart gvmd"
+
+- name: Restart gsad
+  ansible.builtin.service:
+    name: gsad
+    state: restarted
+  listen: "restart gsad"
+
+- name: Reload suricata rules
+  ansible.builtin.command:
+    cmd: suricatasc -c reload-rules
+  listen: "reload suricata rules"
+
+- name: Reload zeek scripts
+  ansible.builtin.command:
+    cmd: zeekctl deploy
+  listen: "reload zeek scripts"

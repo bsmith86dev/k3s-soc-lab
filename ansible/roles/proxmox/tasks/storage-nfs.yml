@@ -1,0 +1,71 @@
+---
+# ansible/roles/proxmox/tasks/storage-nfs.yml
+# Register TrueNAS NFS shares as Proxmox storage backends
+#
+# Prerequisites:
+#   - TrueNAS Scale running on ZimaBoard (10.0.20.5)
+#   - NFS shares created on TrueNAS:
+#       /mnt/tank/backups   → Proxmox Backup Server
+#       /mnt/tank/iso       → ISO images for VM installs
+#       /mnt/tank/media     → Jellyfin media library
+#   - NFS export permissions set to allow Proxmox node IPs
+#
+# Verify NFS shares are reachable before running:
+#   showmount -e 10.0.20.5
+
+- name: Verify NFS connectivity to TrueNAS
+  ansible.builtin.command:
+    cmd: showmount -e {{ truenas_ip }}
+  register: nfs_check
+  changed_when: false
+  failed_when: false
+
+- name: Warn if TrueNAS NFS not reachable
+  ansible.builtin.debug:
+    msg: >
+      WARNING: TrueNAS NFS at {{ truenas_ip }} not reachable.
+      Skipping NFS storage registration.
+      Ensure TrueNAS is online and NFS shares are configured.
+  when: nfs_check.rc != 0
+
+- name: Register NFS backup storage backend
+  ansible.builtin.command:
+    cmd: >
+      pvesm add nfs nfs-truenas-backups
+      --server {{ truenas_ip }}
+      --export /mnt/tank/backups
+      --content backup,snippets
+      --nodes {{ proxmox_cluster_nodes | join(',') }}
+      --options vers=4
+  register: pvesm_backups
+  changed_when: pvesm_backups.rc == 0
+  failed_when:
+    - pvesm_backups.rc != 0
+    - "'already defined' not in pvesm_backups.stderr"
+  when: nfs_check.rc == 0
+
+- name: Register NFS ISO storage backend
+  ansible.builtin.command:
+    cmd: >
+      pvesm add nfs nfs-truenas-iso
+      --server {{ truenas_ip }}
+      --export /mnt/tank/iso
+      --content iso,vztmpl
+      --nodes {{ proxmox_cluster_nodes | join(',') }}
+      --options vers=4
+  register: pvesm_iso
+  changed_when: pvesm_iso.rc == 0
+  failed_when:
+    - pvesm_iso.rc != 0
+    - "'already defined' not in pvesm_iso.stderr"
+  when: nfs_check.rc == 0
+
+- name: Verify storage backends registered
+  ansible.builtin.command:
+    cmd: pvesm status
+  register: pvesm_status
+  changed_when: false
+
+- name: Display storage status
+  ansible.builtin.debug:
+    msg: "{{ pvesm_status.stdout_lines }}"

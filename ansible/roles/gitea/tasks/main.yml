@@ -1,0 +1,17 @@
+---
+# ansible/roles/gitea/tasks/main.yml
+# Deploy self-hosted Gitea on N1 Mini LXC (VMID 302, 10.0.10.50)
+# Acts as a local mirror of the GitHub blerdmh-lab repo
+# Provides an offline-capable, self-hosted git server
+
+- name: Install Gitea prerequisites
+  import_tasks: install.yml
+  tags: [gitea, install]
+
+- name: Configure Gitea
+  import_tasks: configure.yml
+  tags: [gitea, configure]
+
+- name: Configure GitHub mirror
+  import_tasks: mirror.yml
+  tags: [gitea, mirror]

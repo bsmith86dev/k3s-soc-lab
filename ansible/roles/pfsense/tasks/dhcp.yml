@@ -1,0 +1,104 @@
+---
+# ansible/roles/pfsense/tasks/dhcp.yml
+# DHCP server config and static reservations for all VLANs
+# Static reservations ensure consistent IPs before Ansible runs
+
+- name: "DHCP | Configure MGMT VLAN 10 DHCP pool"
+  pfsensible.core.pfsense_dhcp_server:
+    interface: "MGMT"
+    enable: true
+    range_from: "10.0.10.100"
+    range_to: "10.0.10.199"
+    dnsserver: "10.0.10.1"
+    gateway: "10.0.10.1"
+    domain: "lab.blerdmh.local"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DHCP | Configure SERVERS VLAN 20 DHCP pool"
+  pfsensible.core.pfsense_dhcp_server:
+    interface: "SERVERS"
+    enable: true
+    range_from: "10.0.20.100"
+    range_to: "10.0.20.199"
+    dnsserver: "10.0.10.1"
+    gateway: "10.0.20.1"
+    domain: "lab.blerdmh.local"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DHCP | Configure SECURITY VLAN 40 DHCP pool"
+  pfsensible.core.pfsense_dhcp_server:
+    interface: "SECURITY"
+    enable: true
+    range_from: "10.0.40.100"
+    range_to: "10.0.40.199"
+    dnsserver: "10.0.10.1"
+    gateway: "10.0.40.1"
+    domain: "lab.blerdmh.local"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── Static DHCP Reservations ─────────────────────────────────────────────
+# Set MAC addresses to actual values during initial pfSense setup
+# These ensure every host gets a consistent IP before Ansible can run
+
+- name: "DHCP | Reserve — Skynet workstation (VLAN 10)"
+  pfsensible.core.pfsense_dhcp_static:
+    interface: "MGMT"
+    mac: "{{ skynet_mac }}"
+    ipaddr: "10.0.10.10"
+    hostname: "skynet"
+    descr: "Skynet — Ryzen 9 9950X3D workstation"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DHCP | Reserve — AMDPVE (VLAN 10)"
+  pfsensible.core.pfsense_dhcp_static:
+    interface: "MGMT"
+    mac: "{{ amdpve_mac }}"
+    ipaddr: "10.0.10.20"
+    hostname: "amdpve"
+    descr: "AMDPVE — Ryzen 9 7900X primary Proxmox node"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DHCP | Reserve — N1 Mini PVE (VLAN 10)"
+  pfsensible.core.pfsense_dhcp_static:
+    interface: "MGMT"
+    mac: "{{ n1mini_mac }}"
+    ipaddr: "10.0.10.21"
+    hostname: "n1minipve"
+    descr: "N1 Mini PVE — Ryzen 7 5825U secondary Proxmox node"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DHCP | Reserve — ZimaBoard TrueNAS (VLAN 20)"
+  pfsensible.core.pfsense_dhcp_static:
+    interface: "SERVERS"
+    mac: "{{ zimaboard_mac }}"
+    ipaddr: "10.0.20.5"
+    hostname: "truenas"
+    descr: "ZimaBoard 832 — TrueNAS Scale NAS"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DHCP | Reserve — Pi 4 k3s control plane (VLAN 20)"
+  pfsensible.core.pfsense_dhcp_static:
+    interface: "SERVERS"
+    mac: "{{ pi4_mac }}"
+    ipaddr: "10.0.20.10"
+    hostname: "k3s-cp"
+    descr: "Raspberry Pi 4 8GB — k3s control plane + Tailscale subnet router"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "DHCP | Reserve — Pi 5 k3s worker (VLAN 20)"
+  pfsensible.core.pfsense_dhcp_static:
+    interface: "SERVERS"
+    mac: "{{ pi5_mac }}"
+    ipaddr: "10.0.20.11"
+    hostname: "k3s-w1"
+    descr: "Raspberry Pi 5 8GB — k3s worker node"
+    state: present
+  delegate_to: "{{ pfsense_host }}"

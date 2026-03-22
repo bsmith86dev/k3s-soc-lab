@@ -1,0 +1,159 @@
+---
+# ansible/roles/k3s/tasks/install-server.yml
+# Install k3s in server (control plane) mode
+# Target: Pi 4 (k3s-cp, 10.0.20.10)
+#
+# k3s config is written before install so the installer picks it up
+# The installer script is idempotent — safe to re-run
+
+- name: Create k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy k3s server config
+  ansible.builtin.template:
+    src: k3s-config.j2
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: '0600'
+  vars:
+    k3s_mode: server
+
+- name: Check if k3s is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+    force: yes
+  when: not k3s_binary.stat.exists
+
+- name: Install k3s server
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_TOKEN: "{{ vault_k3s_token }}"
+    INSTALL_K3S_EXEC: >-
+      server
+      --cluster-init
+      --tls-san {{ ansible_host }}
+      --tls-san k3s-cp.lab.blerdmh.local
+      --tls-san {{ k3s_api_extra_sans | default('') }}
+      --disable traefik
+      --disable servicelb
+      --flannel-backend=host-gw
+      --node-ip {{ ansible_host }}
+      --advertise-address {{ ansible_host }}
+  when: not k3s_binary.stat.exists
+  notify: restart k3s server
+
+- name: Ensure k3s server is enabled and started
+  ansible.builtin.systemd:
+    name: k3s
+    enabled: yes
+    state: started
+
+- name: Wait for k3s API server to be ready
+  ansible.builtin.wait_for:
+    port: 6443
+    host: "{{ ansible_host }}"
+    delay: 10
+    timeout: 120
+
+- name: Wait for node to reach Ready state
+  ansible.builtin.command:
+    cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[-1].type}'
+  register: node_ready
+  until: node_ready.stdout == "Ready"
+  retries: 20
+  delay: 10
+  changed_when: false
+
+- name: Install MetalLB load balancer
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl apply -f
+      https://raw.githubusercontent.com/metallb/metallb/v{{ metallb_version }}/config/manifests/metallb-native.yaml
+  register: metallb_install
+  changed_when: "'configured' in metallb_install.stdout or 'created' in metallb_install.stdout"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for MetalLB to be ready
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl wait --namespace metallb-system
+      --for=condition=ready pod
+      --selector=app=metallb
+      --timeout=120s
+  changed_when: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Deploy MetalLB IP address pool
+  ansible.builtin.copy:
+    dest: /tmp/metallb-pool.yml
+    content: |
+      apiVersion: metallb.io/v1beta1
+      kind: IPAddressPool
+      metadata:
+        name: lab-pool
+        namespace: metallb-system
+      spec:
+        addresses:
+          - {{ metallb_ip_range }}
+      ---
+      apiVersion: metallb.io/v1beta1
+      kind: L2Advertisement
+      metadata:
+        name: lab-l2-advert
+        namespace: metallb-system
+  notify: apply metallb pool
+
+- name: Apply MetalLB pool config
+  ansible.builtin.command:
+    cmd: k3s kubectl apply -f /tmp/metallb-pool.yml
+  changed_when: true
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Install cert-manager
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl apply -f
+      https://github.com/cert-manager/cert-manager/releases/download/v{{ cert_manager_version }}/cert-manager.yaml
+  register: certmgr_install
+  changed_when: "'configured' in certmgr_install.stdout or 'created' in certmgr_install.stdout"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for cert-manager to be ready
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl wait --namespace cert-manager
+      --for=condition=ready pod
+      --selector=app.kubernetes.io/instance=cert-manager
+      --timeout=120s
+  changed_when: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Install Sealed Secrets controller
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl apply -f
+      https://github.com/bitnami-labs/sealed-secrets/releases/download/v{{ sealed_secrets_version }}/controller.yaml
+  register: sealedsec_install
+  changed_when: "'configured' in sealedsec_install.stdout or 'created' in sealedsec_install.stdout"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml

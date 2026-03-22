@@ -1,0 +1,86 @@
+---
+# ansible/roles/k3s/tasks/install-agent.yml
+# Install k3s in agent (worker) mode
+# Targets: Pi 5 (k3s-w1, 10.0.20.11), k3s-w2-amd VM (10.0.20.12)
+#
+# Prerequisite: install-server.yml must have completed on k3s-cp
+# The agent needs the server URL and cluster token to join
+
+- name: Create k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Deploy k3s agent config
+  ansible.builtin.template:
+    src: k3s-config.j2
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: '0600'
+  vars:
+    k3s_mode: agent
+
+- name: Check if k3s agent is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+    force: yes
+  when: not k3s_binary.stat.exists
+
+- name: Install k3s agent
+  ansible.builtin.command:
+    cmd: /tmp/k3s-install.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    K3S_TOKEN: "{{ vault_k3s_token }}"
+    K3S_URL: "https://{{ k3s_server_ip }}:6443"
+    INSTALL_K3S_EXEC: >-
+      agent
+      --node-ip {{ ansible_host }}
+      --node-label kubernetes.io/hostname={{ inventory_hostname }}
+  when: not k3s_binary.stat.exists
+  notify: restart k3s agent
+
+- name: Label GPU worker node
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl label node {{ inventory_hostname }}
+      gpu=amd-rx5700xt
+      jellyfin-node=true
+      --overwrite
+  delegate_to: "{{ groups['k3s_control_plane'][0] }}"
+  when: has_amd_gpu | default(false) | bool
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Ensure k3s agent is enabled and started
+  ansible.builtin.systemd:
+    name: k3s-agent
+    enabled: yes
+    state: started
+
+- name: Wait for agent node to appear in cluster
+  ansible.builtin.command:
+    cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[-1].type}'
+  delegate_to: "{{ groups['k3s_control_plane'][0] }}"
+  register: node_status
+  until: node_status.stdout == "Ready"
+  retries: 20
+  delay: 10
+  changed_when: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Confirm node joined cluster
+  ansible.builtin.debug:
+    msg: "Node {{ inventory_hostname }} successfully joined the cluster and is Ready"

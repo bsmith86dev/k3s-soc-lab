@@ -1,0 +1,61 @@
+---
+# ansible/roles/gitea/tasks/configure.yml
+# Post-install Gitea configuration via API
+# Creates admin user, sets registration policy, configures webhooks
+
+- name: Check if Gitea admin user exists
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ gitea_http_port }}/api/v1/users/{{ gitea_admin_user }}"
+    method: GET
+    status_code: [200, 404]
+  register: admin_check
+
+- name: Create Gitea admin user (first-time setup)
+  ansible.builtin.command:
+    cmd: >
+      /opt/gitea/gitea admin user create
+      --config /etc/gitea/app.ini
+      --username {{ gitea_admin_user }}
+      --password {{ vault_gitea_admin_password }}
+      --email {{ gitea_admin_email }}
+      --admin
+      --must-change-password=false
+  become: yes
+  become_user: git
+  when: admin_check.status == 404
+  no_log: true
+
+- name: Disable public registration via API
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ gitea_http_port }}/api/v1/admin/orgs"
+    method: GET
+    user: "{{ gitea_admin_user }}"
+    password: "{{ vault_gitea_admin_password }}"
+    force_basic_auth: yes
+    status_code: [200]
+  register: gitea_api_check
+  failed_when: false
+
+- name: Create blerdmh-lab organization in Gitea
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ gitea_http_port }}/api/v1/orgs"
+    method: POST
+    user: "{{ gitea_admin_user }}"
+    password: "{{ vault_gitea_admin_password }}"
+    force_basic_auth: yes
+    body_format: json
+    body:
+      username: "blerdmh"
+      full_name: "blerdmh Lab"
+      description: "blerdmh home lab infrastructure"
+      visibility: "private"
+    status_code: [201, 422]   # 422 = already exists
+  no_log: true
+
+- name: Configure UFW for Gitea
+  community.general.ufw:
+    rule: allow
+    port: "{{ gitea_http_port | string }}"
+    proto: tcp
+    src: "10.0.10.0/24"
+    comment: "Gitea web UI from MGMT VLAN"

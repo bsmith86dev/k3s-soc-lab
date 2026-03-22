@@ -1,0 +1,13 @@
+---
+# ansible/inventory/host_vars/k3s-cp/main.yml
+# Pi 4 — k3s control plane + Tailscale subnet router
+
+k3s_tailscale_subnet_router: true
+
+# UFW extra rules for control plane
+common_ufw_extra_rules:
+  - { rule: allow, port: "6443", proto: tcp, src: "10.0.20.0/24", comment: "k3s API server" }
+  - { rule: allow, port: "6443", proto: tcp, src: "10.0.10.0/24", comment: "k3s API from MGMT" }
+  - { rule: allow, port: "10250", proto: tcp, src: "10.0.20.0/24", comment: "kubelet metrics" }
+  - { rule: allow, port: "2379:2380", proto: tcp, src: "10.0.20.0/24", comment: "etcd cluster" }
+  - { rule: allow, port: "8472", proto: udp, src: "10.0.20.0/24", comment: "flannel VXLAN" }

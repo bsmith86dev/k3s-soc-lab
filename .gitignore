@@ -1,0 +1,88 @@
+# ── NEVER commit these ────────────────────────────────────────────────────
+
+# Ansible vault plaintext
+ansible/inventory/group_vars/all/vault.yml.plain
+*.vault.plain
+
+# Kubeconfigs
+*.kubeconfig
+kubeconfig
+.kube/
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+!*.pub
+
+# Terraform (future use)
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# Plaintext secret files
+*.secret
+*.secrets
+secrets.yml
+secrets.yaml
+!*-sealed.yml      # Sealed Secrets ARE safe to commit
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# ── Tool artifacts ────────────────────────────────────────────────────────
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Ansible
+*.retry
+
+# MkDocs build
+site/
+_site/
+
+# Temp files
+*.tmp
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Pre-commit
+.pre-commit-cache/
+
+# ── IDE ───────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.code-workspace
+
+# ── Lab-specific ──────────────────────────────────────────────────────────
+
+# Never commit packet captures
+*.pcap
+*.cap
+*.pcapng
+
+# Scratch / temp work
+scratch/
+tmp/
+
+# ISOs and firmware
+*.iso
+*.img
+*.firmware
+
+# pfSense backups contain hashed passwords — safe to commit but large
+# Uncomment to exclude:
+# switch/pfsense-backup-*.xml

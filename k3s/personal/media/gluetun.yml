@@ -1,0 +1,231 @@
+---
+# k3s/personal/media/gluetun.yml
+# Gluetun — VPN gateway container
+#
+# Architecture:
+#   Gluetun runs as the VPN gateway for the entire download stack.
+#   SABnzbd and qBittorrent use Gluetun's network namespace via
+#   the sidecar pattern — they share Gluetun's pod network.
+#   This means ALL download traffic exits through the VPN tunnel.
+#   Prowlarr, Radarr, Sonarr, Lidarr, Bazarr do NOT use the VPN —
+#   they only communicate internally with the download clients.
+#
+# VPN credentials → sealed secret: gluetun-secret-sealed.yml
+# Supported providers: mullvad, protonvpn, nordvpn, expressvpn, etc.
+# See: https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gluetun
+  namespace: media
+  labels:
+    app: gluetun
+    component: vpn-gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate    # Never run two VPN instances simultaneously
+  selector:
+    matchLabels:
+      app: gluetun
+  template:
+    metadata:
+      labels:
+        app: gluetun
+    spec:
+      # Pin to a specific node — avoids VPN split across nodes
+      nodeSelector:
+        kubernetes.io/hostname: k3s-w1
+
+      containers:
+
+        # ── Gluetun VPN ──────────────────────────────────────────────────
+        - name: gluetun
+          image: ghcr.io/qdm12/gluetun:latest
+          securityContext:
+            capabilities:
+              add: [NET_ADMIN]
+          env:
+            - name: VPN_SERVICE_PROVIDER
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-secret
+                  key: VPN_SERVICE_PROVIDER
+            - name: VPN_TYPE
+              value: "wireguard"
+            - name: WIREGUARD_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-secret
+                  key: WIREGUARD_PRIVATE_KEY
+            - name: WIREGUARD_ADDRESSES
+              valueFrom:
+                secretKeyRef:
+                  name: gluetun-secret
+                  key: WIREGUARD_ADDRESSES
+            - name: SERVER_COUNTRIES
+              value: "Switzerland"
+            - name: FIREWALL_OUTBOUND_SUBNETS
+              value: "10.0.0.0/8,10.42.0.0/16,10.43.0.0/16"
+            - name: HEALTH_VPN_DURATION_INITIAL
+              value: "30s"
+            - name: TZ
+              value: "America/Chicago"
+          ports:
+            # SABnzbd
+            - containerPort: 8080
+              name: sabnzbd
+            # qBittorrent web UI
+            - containerPort: 8090
+              name: qbittorrent
+            # qBittorrent torrent port
+            - containerPort: 6881
+              name: qbt-tcp
+              protocol: TCP
+            - containerPort: 6881
+              name: qbt-udp
+              protocol: UDP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+        # ── SABnzbd — Usenet download client ─────────────────────────────
+        - name: sabnzbd
+          image: lscr.io/linuxserver/sabnzbd:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "America/Chicago"
+          volumeMounts:
+            - name: sabnzbd-config
+              mountPath: /config
+            - name: media-downloads
+              mountPath: /downloads
+            - name: media-incomplete
+              mountPath: /incomplete-downloads
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+
+        # ── qBittorrent — Torrent download client ─────────────────────────
+        - name: qbittorrent
+          image: lscr.io/linuxserver/qbittorrent:latest
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "America/Chicago"
+            - name: WEBUI_PORT
+              value: "8090"
+          volumeMounts:
+            - name: qbittorrent-config
+              mountPath: /config
+            - name: media-downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+
+        # ── Unpackerr — auto-extract completed downloads ──────────────────
+        - name: unpackerr
+          image: golift/unpackerr:latest
+          env:
+            - name: TZ
+              value: "America/Chicago"
+            - name: UN_SONARR_0_URL
+              value: "http://sonarr.media.svc.cluster.local:8989"
+            - name: UN_SONARR_0_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arr-api-keys
+                  key: SONARR_API_KEY
+            - name: UN_RADARR_0_URL
+              value: "http://radarr.media.svc.cluster.local:7878"
+            - name: UN_RADARR_0_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arr-api-keys
+                  key: RADARR_API_KEY
+            - name: UN_LIDARR_0_URL
+              value: "http://lidarr.media.svc.cluster.local:8686"
+            - name: UN_LIDARR_0_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: arr-api-keys
+                  key: LIDARR_API_KEY
+            - name: UN_SONARR_0_PATHS_0
+              value: "/downloads"
+            - name: UN_RADARR_0_PATHS_0
+              value: "/downloads"
+            - name: UN_LIDARR_0_PATHS_0
+              value: "/downloads"
+          volumeMounts:
+            - name: media-downloads
+              mountPath: /downloads
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+      volumes:
+        - name: sabnzbd-config
+          persistentVolumeClaim:
+            claimName: sabnzbd-config-pvc
+        - name: qbittorrent-config
+          persistentVolumeClaim:
+            claimName: qbittorrent-config-pvc
+        - name: media-downloads
+          persistentVolumeClaim:
+            claimName: media-downloads-pvc
+        - name: media-incomplete
+          persistentVolumeClaim:
+            claimName: media-incomplete-pvc
+
+---
+# Service — exposes Gluetun pod ports within the cluster
+# SABnzbd and qBittorrent are reachable via this service
+# because they share Gluetun's network namespace
+apiVersion: v1
+kind: Service
+metadata:
+  name: gluetun
+  namespace: media
+spec:
+  selector:
+    app: gluetun
+  ports:
+    - name: sabnzbd
+      port: 8080
+      targetPort: 8080
+    - name: qbittorrent
+      port: 8090
+      targetPort: 8090
+    - name: qbt-tcp
+      port: 6881
+      targetPort: 6881
+      protocol: TCP
+    - name: qbt-udp
+      port: 6881
+      targetPort: 6881
+      protocol: UDP

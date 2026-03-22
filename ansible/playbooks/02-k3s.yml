@@ -1,0 +1,33 @@
+---
+# ansible/playbooks/02-k3s.yml
+# Provision k3s cluster — control plane first, then workers
+#
+# Run order is enforced by serial: 1 on workers
+# Control plane MUST be Ready before workers attempt to join
+#
+# First run:
+#   ansible-playbook -i inventory/hosts.yml playbooks/02-k3s.yml
+#
+# After first run, kubeconfig is at ~/.kube/config-blerdmh-lab on Skynet
+# Verify: kubectl --kubeconfig ~/.kube/config-blerdmh-lab get nodes
+
+- name: Pre-flight and k3s control plane
+  hosts: k3s_control_plane
+  become: yes
+  gather_facts: yes
+  roles:
+    - k3s
+  tags:
+    - k3s
+    - k3s-cp
+
+- name: k3s worker nodes
+  hosts: k3s_workers
+  become: yes
+  gather_facts: yes
+  serial: 1           # Join workers one at a time — avoids token race condition
+  roles:
+    - k3s
+  tags:
+    - k3s
+    - k3s-workers

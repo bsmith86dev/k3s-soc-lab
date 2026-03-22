@@ -1,0 +1,26 @@
+---
+# ansible/roles/pfsense/defaults/main.yml
+# Default variables for pfSense role
+# Override sensitive values in ansible/inventory/group_vars/all/vault.yml
+
+# pfSense management connection
+pfsense_host: "10.0.10.1"
+pfsense_user: "admin"
+pfsense_password: "{{ vault_pfsense_password }}"   # Set in vault.yml
+
+# MAC addresses — fill these in before running dhcp.yml
+# Get MACs from each device:
+#   Linux: ip link show | grep ether
+#   Proxmox: visible in web UI under node summary
+skynet_mac: "{{ vault_skynet_mac }}"
+amdpve_mac: "{{ vault_amdpve_mac }}"
+n1mini_mac: "{{ vault_n1mini_mac }}"
+zimaboard_mac: "{{ vault_zimaboard_mac }}"
+pi4_mac: "{{ vault_pi4_mac }}"
+pi5_mac: "{{ vault_pi5_mac }}"
+
+# pfSense WAN interface name
+pfsense_wan_interface: "igb0"
+
+# pfSense LAN/trunk interface (connected to MokerLink port 1)
+pfsense_lan_interface: "igb1"

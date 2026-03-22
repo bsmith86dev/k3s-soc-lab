@@ -1,0 +1,295 @@
+---
+# ansible/roles/pfsense/tasks/rules.yml
+# Core firewall ruleset for all VLANs
+# Prerequisites: aliases.yml must have run first
+#
+# Rule philosophy:
+#   - Default deny all inter-VLAN traffic
+#   - Explicit allow only for documented, justified flows
+#   - SECURITY VLAN (40) has broad read access for monitoring
+#   - RED_TEAM (61) is fully isolated — no egress except explicit
+#   - IOT/HONEYPOT (50) internet only, no RFC1918 access
+
+# ─── MGMT VLAN 10 ────────────────────────────────────────────────────────
+
+- name: "MGMT | Allow MGMT_HOSTS to reach all VLANs (admin access)"
+  pfsensible.core.pfsense_rule:
+    name: "MGMT_to_ALL"
+    interface: "MGMT"
+    source: "MGMT_HOSTS"
+    destination: any
+    protocol: any
+    action: pass
+    descr: "Admin workstation full access"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "MGMT | Allow DNS from all hosts to DNS_SERVERS"
+  pfsensible.core.pfsense_rule:
+    name: "MGMT_DNS"
+    interface: "MGMT"
+    source: "10.0.10.0/24"
+    destination: "DNS_SERVERS"
+    protocol: udp
+    destination_port: 53
+    action: pass
+    descr: "DNS resolution for MGMT VLAN"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "MGMT | Block MGMT to RFC1918 (non-admin hosts)"
+  pfsensible.core.pfsense_rule:
+    name: "MGMT_block_lateral"
+    interface: "MGMT"
+    source: "10.0.10.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "Block non-admin MGMT hosts from reaching other VLANs"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "MGMT | Allow internet egress"
+  pfsensible.core.pfsense_rule:
+    name: "MGMT_inet"
+    interface: "MGMT"
+    source: "10.0.10.0/24"
+    destination: any
+    action: pass
+    descr: "MGMT internet access"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── SERVERS VLAN 20 ─────────────────────────────────────────────────────
+
+- name: "SERVERS | Allow k3s nodes to reach NAS (NFS)"
+  pfsensible.core.pfsense_rule:
+    name: "SERVERS_k3s_to_nas_nfs"
+    interface: "SERVERS"
+    source: "K3S_NODES"
+    destination: "NAS_HOST"
+    protocol: tcp
+    destination_port: 2049
+    action: pass
+    descr: "k3s nodes NFS mount to TrueNAS"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "SERVERS | Allow k3s nodes to reach NAS (NFSv4 additional ports)"
+  pfsensible.core.pfsense_rule:
+    name: "SERVERS_k3s_to_nas_nfsv4"
+    interface: "SERVERS"
+    source: "K3S_NODES"
+    destination: "NAS_HOST"
+    protocol: tcp
+    destination_port: "111 2049 20048"
+    action: pass
+    descr: "NFSv4 portmapper and mount daemon"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "SERVERS | Allow k3s nodes internet egress"
+  pfsensible.core.pfsense_rule:
+    name: "SERVERS_k3s_inet"
+    interface: "SERVERS"
+    source: "K3S_NODES"
+    destination: "!RFC1918"
+    action: pass
+    descr: "k3s nodes pull container images etc"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "SERVERS | Allow Proxmox nodes to reach NAS (PBS backup)"
+  pfsensible.core.pfsense_rule:
+    name: "SERVERS_pve_to_nas"
+    interface: "SERVERS"
+    source: "PROXMOX_NODES"
+    destination: "NAS_HOST"
+    protocol: tcp
+    destination_port: "2049 8007"
+    action: pass
+    descr: "Proxmox Backup Server NFS + PBS API port"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "SERVERS | Block inter-server lateral movement by default"
+  pfsensible.core.pfsense_rule:
+    name: "SERVERS_block_lateral"
+    interface: "SERVERS"
+    source: "10.0.20.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "Default deny lateral movement within SERVERS VLAN"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── SECURITY VLAN 40 ────────────────────────────────────────────────────
+
+- name: "SECURITY | Allow SECURITY_VMS to read logs from all VLANs (Wazuh)"
+  pfsensible.core.pfsense_rule:
+    name: "SECURITY_wazuh_ingest"
+    interface: "SECURITY"
+    source: "SECURITY_VMS"
+    destination: "RFC1918"
+    protocol: tcp
+    destination_port: "514 1514 1515"
+    action: pass
+    descr: "Wazuh agent comms and syslog ingest from all VLANs"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "SECURITY | Allow SECURITY_VMS internet for threat intel feeds"
+  pfsensible.core.pfsense_rule:
+    name: "SECURITY_inet"
+    interface: "SECURITY"
+    source: "SECURITY_VMS"
+    destination: "!RFC1918"
+    action: pass
+    descr: "Threat intel feed updates, CVE lookups"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "SECURITY | Block unsanctioned egress from SECURITY VLAN"
+  pfsensible.core.pfsense_rule:
+    name: "SECURITY_block_other"
+    interface: "SECURITY"
+    source: "10.0.40.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "Security VMs should not initiate connections into other VLANs"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── IOT / HONEYPOT VLAN 50 ──────────────────────────────────────────────
+
+- name: "IOT | Block IOT from all RFC1918 (strict isolation)"
+  pfsensible.core.pfsense_rule:
+    name: "IOT_block_rfc1918"
+    interface: "IOT_HONEYPOT"
+    source: "10.0.50.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "IoT and honeypot devices cannot reach internal networks"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "IOT | Allow IOT internet egress only"
+  pfsensible.core.pfsense_rule:
+    name: "IOT_inet"
+    interface: "IOT_HONEYPOT"
+    source: "10.0.50.0/24"
+    destination: any
+    action: pass
+    descr: "IoT devices get internet access only"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── PRODUCTION VLAN 60 ──────────────────────────────────────────────────
+
+- name: "PROD | Allow PRODUCTION to reach SERVERS (k3s workloads)"
+  pfsensible.core.pfsense_rule:
+    name: "PROD_to_servers"
+    interface: "PRODUCTION"
+    source: "10.0.60.0/24"
+    destination: "K3S_NODES"
+    protocol: tcp
+    destination_port: "80 443"
+    action: pass
+    descr: "Production clients access k3s services"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "PROD | Allow PRODUCTION internet egress"
+  pfsensible.core.pfsense_rule:
+    name: "PROD_inet"
+    interface: "PRODUCTION"
+    source: "10.0.60.0/24"
+    destination: "!RFC1918"
+    action: pass
+    descr: "Production VLAN internet access"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "PROD | Block PRODUCTION from reaching other internal VLANs"
+  pfsensible.core.pfsense_rule:
+    name: "PROD_block_lateral"
+    interface: "PRODUCTION"
+    source: "10.0.60.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "Production VLAN default deny lateral"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── RED TEAM VLAN 61 ────────────────────────────────────────────────────
+
+- name: "REDTEAM | Block RED_TEAM from ALL RFC1918 (full isolation)"
+  pfsensible.core.pfsense_rule:
+    name: "REDTEAM_block_rfc1918"
+    interface: "RED_TEAM"
+    source: "10.0.61.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "Red team VLAN fully isolated from all internal networks"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "REDTEAM | Allow RED_TEAM controlled internet for tool downloads"
+  pfsensible.core.pfsense_rule:
+    name: "REDTEAM_inet_controlled"
+    interface: "RED_TEAM"
+    source: "10.0.61.0/24"
+    destination: "!RFC1918"
+    action: pass
+    descr: "Red team internet — review logs; disable when not in use"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── PURPLE LAB VLAN 62 ──────────────────────────────────────────────────
+
+- name: "PURPLE | Allow PURPLE_LAB to reach SECURITY_VMS (log shipping)"
+  pfsensible.core.pfsense_rule:
+    name: "PURPLE_to_security"
+    interface: "PURPLE_LAB"
+    source: "10.0.62.0/24"
+    destination: "SECURITY_VMS"
+    protocol: tcp
+    destination_port: "514 1514 1515"
+    action: pass
+    descr: "Purple lab VMs ship logs to Wazuh for detection exercise"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "PURPLE | Block PURPLE_LAB from other VLANs"
+  pfsensible.core.pfsense_rule:
+    name: "PURPLE_block_other"
+    interface: "PURPLE_LAB"
+    source: "10.0.62.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "Purple lab isolated except for SECURITY VLAN log shipping"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+# ─── GUEST / DMZ VLAN 70 ─────────────────────────────────────────────────
+
+- name: "GUEST | Block GUEST from ALL internal networks"
+  pfsensible.core.pfsense_rule:
+    name: "GUEST_block_rfc1918"
+    interface: "GUEST_DMZ"
+    source: "10.0.70.0/24"
+    destination: "RFC1918"
+    action: block
+    descr: "Guest VLAN cannot reach any internal network"
+    state: present
+  delegate_to: "{{ pfsense_host }}"
+
+- name: "GUEST | Allow GUEST internet only"
+  pfsensible.core.pfsense_rule:
+    name: "GUEST_inet"
+    interface: "GUEST_DMZ"
+    source: "10.0.70.0/24"
+    destination: any
+    action: pass
+    descr: "Guest internet access only"
+    state: present
+  delegate_to: "{{ pfsense_host }}"

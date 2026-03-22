@@ -1,0 +1,27 @@
+---
+# ansible/playbooks/05-proxmox.yml
+# Configure Proxmox nodes after cluster is formed
+#
+# Prerequisites (manual before running):
+#   - Proxmox VE installed on both nodes via ISO
+#   - Cluster formed: pvecm create blerdmh-lab (on AMDPVE)
+#                     pvecm add 10.0.10.20     (on N1 Mini)
+#   - SSH key added to root on both nodes
+#   - Both nodes reachable at 10.0.10.20 and 10.0.10.21
+#
+# Run full config:
+#   ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml
+#
+# Run specific sections:
+#   ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml --tags repos
+#   ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml --tags vms
+#   ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml --tags iommu --limit amdpve
+
+- name: Configure Proxmox nodes
+  hosts: proxmox_nodes
+  become: yes
+  gather_facts: yes
+  roles:
+    - proxmox
+  tags:
+    - proxmox

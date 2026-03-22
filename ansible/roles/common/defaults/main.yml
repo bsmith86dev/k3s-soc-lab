@@ -1,0 +1,90 @@
+---
+# ansible/roles/common/defaults/main.yml
+# Defaults for the common role — applied to all lab Linux hosts
+# Override per host in host_vars/ or per group in group_vars/
+
+# ── Identity ──────────────────────────────────────────────────────────────
+
+common_admin_user: techinb
+common_ssh_public_key_path: "~/.ssh/id_ed25519.pub"
+common_ssh_exclusive_keys: false   # Set true to remove all other authorized keys
+
+# ── Locale / Time ─────────────────────────────────────────────────────────
+
+common_timezone: "America/Chicago"
+common_locale: "en_US.UTF-8"
+
+# ── SSH ───────────────────────────────────────────────────────────────────
+
+common_ssh_permit_root_login: "prohibit-password"   # Proxmox nodes need root SSH
+common_ssh_max_auth_tries: 3
+common_ssh_max_sessions: 5
+
+# ── fail2ban ──────────────────────────────────────────────────────────────
+
+common_fail2ban_bantime: 3600       # 1 hour ban
+common_fail2ban_findtime: 600       # 10 minute window
+common_fail2ban_maxretry: 3
+
+# ── Packages ──────────────────────────────────────────────────────────────
+
+common_packages:
+  # Network tools
+  - curl
+  - wget
+  - net-tools
+  - dnsutils
+  - nmap
+  - tcpdump
+  - iperf3
+  - traceroute
+  # System utilities
+  - htop
+  - iotop
+  - iftop
+  - lsof
+  - strace
+  - vim
+  - git
+  - jq
+  - unzip
+  - rsync
+  # Security
+  - fail2ban
+  - ufw
+  - auditd
+  - rkhunter
+  # Time
+  - chrony
+  # Logging
+  - rsyslog
+  # Python (Ansible dependencies)
+  - python3
+  - python3-pip
+
+common_packages_remove:
+  - telnet
+  - rsh-client
+  - rsh-redone-client
+  - talk
+  - ntalk
+
+# ── UFW extra rules ───────────────────────────────────────────────────────
+# Override per host/group to open additional ports
+# Example:
+#   common_ufw_extra_rules:
+#     - { rule: allow, port: "8006", proto: tcp, src: "10.0.10.0/24", comment: "Proxmox web UI" }
+
+common_ufw_extra_rules: []
+
+# ── Disabled services ─────────────────────────────────────────────────────
+
+common_disabled_services:
+  - avahi-daemon
+  - bluetooth
+  - cups
+  - cups-browsed
+
+# ── Wazuh ─────────────────────────────────────────────────────────────────
+
+wazuh_manager_ip: "10.0.40.10"
