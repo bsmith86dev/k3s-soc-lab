@@ -86,3 +86,4 @@ tmp/
 # pfSense backups contain hashed passwords — safe to commit but large
 # Uncomment to exclude:
 # switch/pfsense-backup-*.xml
+.ansible/
