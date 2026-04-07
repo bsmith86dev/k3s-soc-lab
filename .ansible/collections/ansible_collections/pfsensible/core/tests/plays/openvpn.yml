@@ -1,0 +1,370 @@
+---
+- hosts: pfsense
+  tasks:
+    - name: OpenVPN CA
+      pfsensible.core.pfsense_ca:
+        name: OpenVPN CA
+        method: internal
+        state: present
+      register: openvpn
+      tags:
+        - openvpn
+        - openvpn_ca
+
+    - name: Generate new internal certificate
+      pfsensible.core.pfsense_cert:
+        method: internal
+        name: pfsense-test
+        ca: OpenVPN CA
+        keytype: RSA
+        keylen: 2048
+        lifetime: 3650
+        dn_country: US
+        certtype: server
+        state: present
+      tags: openvpn_cert
+
+    - name: Setup RADIUS
+      pfsensible.core.pfsense_authserver_radius:
+        name: RADIUS
+        protocol: MSCHAPv2
+        host: radius.example.com
+        secret: item_secret
+
+    - name: Setup LDAP
+      pfsensible.core.pfsense_authserver_ldap:
+        name: ASLDAP
+        host: ldap.example.com
+        transport: tcp
+        authcn: CN=Users
+        scope: one
+
+    - set_fact:
+         openvpn_psk: |-
+           #
+           # 2048 bit OpenVPN static key
+           #
+           -----BEGIN OpenVPN Static key V1-----
+           f896b014f220bcf9a3023b5b68a5cd88
+           62421f044956dad4f94264211b121bcf
+           7e2f5f82e11964575a3f39af8c196931
+           dd63f3ff13615363257bcaa4e46b60cd
+           93a2a73027575d0cc2ed83927af11b9f
+           1122b6acdab05bb7c9de36851470ee2b
+           3d160a0ee03e3f31d32ac018a602916b
+           c8db1791029a5ab1ffd7d93ff5a91b0a
+           46050a804ff7207d46f4f61d33d09e79
+           56cd4c6748e5e5f1236f7a6770954303
+           1ef9b2154f2f3b22a5eb34079f4c1872
+           4dee88ca57ff95da93642f8e59c1bc40
+           d9793cdff43848960625f3d335264f72
+           1e6c2fdd02f16e2b95b1cde182f7099b
+           c32e314105631627e15e113885240ab1
+           199fbbf0ed739df6ad3617691531de43
+           -----END OpenVPN Static key V1-----
+      tags: always
+
+    - name: Create OpenVPN Server 1
+      import_tasks: tasks/test_openvpn_server_create.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server 1
+          mode: server_tls_user
+          authmode:
+            - RADIUS
+          interface: wan
+          local_port: 1194
+          tls: "{{ openvpn_psk }}"
+          tls_type: auth
+          ca: OpenVPN CA
+          cert: pfsense-test
+          data_ciphers:
+            - AES-256-GCM
+            - AES-128-GCM
+            - AES-256-CBC
+          tunnel_network: 10.100.0.0/24
+          compression: ""
+          gwredir: yes
+          passtos: yes
+          dns_domain: example.com
+          dns_server1: 10.10.10.10
+          dns_server2: 10.10.10.11
+          custom_options: |-
+            tls-version-min 1.2;
+          username_as_common_name: no
+        openvpn_server_vpnid: 1
+      tags: openvpn
+
+    - name: Create OpenVPN Server 2
+      import_tasks: tasks/test_openvpn_server_create.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server 2
+          mode: server_tls_user
+          authmode:
+            - RADIUS
+          interface: any
+          local_port: 1195
+          ca: OpenVPN CA
+          cert: pfsense-test
+          crl: OpenVPN CA CRL
+          data_ciphers:
+            - AES-256-GCM
+            - AES-128-GCM
+            - AES-256-CBC
+          digest: SHA256 (256-bit)
+          tunnel_network: 10.100.0.0/24
+          compression: ""
+          gwredir: no
+          passtos: no
+          dns_domain: example.com
+          dns_server1: 10.10.10.10
+          dns_server2: 10.10.10.11
+          custom_options: |-
+            server 10.100.1.0 255.255.255.0 'nopool';
+            ifconfig-pool 10.110.1.2 10.110.1.62;
+            tls-export-cert /tmp;
+            tls-version-min 1.2;
+            # Use manual vs redirect gateway above to add block-local
+            push "redirect-gateway def1 block-local";
+            push "block-outside-dns";
+            push "dhcp-option DOMAIN example.com";
+          username_as_common_name: no
+        openvpn_server_vpnid: 2
+      tags: openvpn
+
+    - name: Create OpenVPN Server 3
+      import_tasks: tasks/test_openvpn_server_create.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server 3
+          mode: p2p_shared_key
+          interface: wan
+          local_port: 1196
+          shared_key: "{{ openvpn_psk }}"
+          tunnel_network: 10.1.0.1/28
+          remote_network: 10.20.0.0/24
+          compression: ""
+          digest: RIPEMD160
+          passtos: yes
+          custom_options: ping-restart 0
+          verbosity_level: 3
+        openvpn_server_vpnid: 3
+      tags:
+        - openvpn
+        - openvpn_psk
+
+    - name: Create OpenVPN Server generate
+      import_tasks: tasks/test_openvpn_server_create.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server generate
+          mode: server_tls_user
+          authmode:
+            - RADIUS
+          interface: wan
+          local_port: 1197
+          tls: generate
+          tls_type: auth
+          ca: OpenVPN CA
+          cert: pfsense-test
+          data_ciphers:
+            - AES-256-GCM
+            - AES-128-GCM
+            - AES-256-CBC
+          tunnel_network: 10.100.1.0/24
+          compression: ""
+          gwredir: yes
+          passtos: yes
+          dns_domain: example.com
+          dns_server1: 10.10.10.10
+          dns_server2: 10.10.10.11
+          custom_options: |-
+            tls-version-min 1.2;
+          username_as_common_name: no
+        openvpn_server_vpnid: 4
+      tags:
+        - openvpn
+        - openvpn_generate
+
+    - name: Create OpenVPN override vpnuser
+      import_tasks: tasks/test_openvpn_override_create.yml
+      vars:
+        openvpn_override_args:
+          name: vpnuser
+          server_list:
+            - OpenVPN Server 1
+          custom_options: ifconfig-push 10.100.0.100 255.255.255.0
+          state: present
+        openvpn_override_vpnids:
+          - 1
+      tags:
+        - openvpn
+        - openvpn_override
+
+    - name: Create VPN1 interface
+      import_tasks: tasks/test_interface_create.yml
+      vars:
+        interface_args:
+          interface: ovpns1
+          descr: VPN1
+          enable: yes
+        interface_ifname: opt1
+      tags:
+        - openvpn
+        - openvpn_interface
+
+    - name: Create VPN2 interface
+      import_tasks: tasks/test_interface_create.yml
+      vars:
+        interface_args:
+          interface: ovpns2
+          descr: VPN2
+          enable: yes
+        interface_ifname: opt2
+      tags:
+        - openvpn
+        - openvpn_interface
+
+    - name: Create VPN3 interface
+      import_tasks: tasks/test_interface_create.yml
+      vars:
+        interface_args:
+          interface: ovpns3
+          descr: VPN3
+          enable: yes
+        interface_ifname: opt3
+      tags:
+        - openvpn
+        - openvpn_interface
+
+    - set_fact:
+        ifname_map:
+          opt1: ovpns1
+          opt2: ovpns2
+          opt3: ovpns3
+      tags:
+        - openvpn
+        - openvpn_interface
+        - openvpn_interface_group
+
+    - name: Create VPN interface group
+      import_tasks: tasks/test_interface_group_create.yml
+      vars:
+        interface_group_args:
+          name: VPN
+          members:
+            - VPN1
+            - VPN2
+            - VPN3
+        interface_group_member_ifnames:
+            - opt1
+            - opt2
+            - opt3
+      tags:
+        - openvpn
+        - openvpn_interface
+
+    - name: Delete OpenVPN override vpnuser
+      import_tasks: tasks/test_openvpn_override_delete.yml
+      vars:
+        openvpn_override_args:
+          name: vpnuser
+      tags:
+        - openvpn
+        - openvpn_override
+
+    - name: Delete VPN1 interfce (fails)
+      pfsensible.core.pfsense_interface:
+        descr: VPN1
+        state: absent
+      register: interface
+      failed_when: interface.msg != "The interface is part of the group VPN. Please remove it from the group first."
+      tags:
+        - openvpn
+        - openvpn_interface_delete
+
+    - name: Delete OpenVPN Server 1 (fails)
+      pfsensible.core.pfsense_openvpn_server:
+        name: OpenVPN Server 1
+        state: absent
+      tags:
+        - openvpn
+        - openvpn_delete
+      register: openvpn_server
+      failed_when: openvpn_server.msg != "Cannot delete the OpenVPN instance while the interface ovpns1 is assigned. Remove the interface assignment first."
+
+    - name: Delete VPN interface_group
+      pfsensible.core.pfsense_interface_group:
+        name: VPN
+        state: absent
+      tags:
+        - openvpn
+        - openvpn_interface_delete
+
+    - name: Delete VPN1 interfce
+      pfsensible.core.pfsense_interface:
+        descr: VPN1
+        state: absent
+      register: interface
+      tags:
+        - openvpn
+        - openvpn_interface_delete
+
+    - name: Delete OpenVPN Server 1
+      import_tasks: tasks/test_openvpn_server_delete.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server 1
+        openvpn_server_vpnid: 1
+      tags:
+        - openvpn
+        - openvpn_delete
+
+    - name: Delete VPN2 interfce
+      pfsensible.core.pfsense_interface:
+        descr: VPN2
+        state: absent
+      register: interface
+      tags:
+        - openvpn
+        - openvpn_interface_delete
+
+    - name: Delete OpenVPN Server 2
+      import_tasks: tasks/test_openvpn_server_delete.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server 2
+        openvpn_server_vpnid: 2
+      tags:
+        - openvpn
+        - openvpn_delete
+
+    - name: Delete VPN3 interfce
+      pfsensible.core.pfsense_interface:
+        descr: VPN3
+        state: absent
+      register: interface
+      tags:
+        - openvpn
+        - openvpn_interface_delete
+
+    - name: Delete OpenVPN Server 3
+      import_tasks: tasks/test_openvpn_server_delete.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server 3
+        openvpn_server_vpnid: 3
+      tags:
+        - openvpn
+        - openvpn_delete
+
+    - name: Delete OpenVPN Server generate
+      import_tasks: tasks/test_openvpn_server_delete.yml
+      vars:
+        openvpn_server_args:
+          name: OpenVPN Server generate
+        openvpn_server_vpnid: 4
+      tags:
+        - openvpn
+        - openvpn_delete

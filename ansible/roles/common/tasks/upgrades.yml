@@ -14,12 +14,12 @@
 - name: Configure unattended-upgrades
   ansible.builtin.copy:
     dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    mode: '0644'
     content: |
       Unattended-Upgrade::Allowed-Origins {
         "${distro_id}:${distro_codename}-security";
       };
       Unattended-Upgrade::Package-Blacklist {
-        // Hold back packages that could disrupt lab services
         "proxmox-ve";
         "pve-kernel*";
         "k3s";
@@ -36,7 +36,6 @@
       Unattended-Upgrade::Automatic-Reboot-WithUsers "false";
       Unattended-Upgrade::SyslogEnable "true";
       Unattended-Upgrade::SyslogFacility "daemon";
-    mode: '0644'
   notify: restart unattended-upgrades
 
 - name: Configure auto-upgrade schedule

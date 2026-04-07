@@ -98,8 +98,8 @@
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
   loop:
-    - { regexp: '^-Xms', line: "-Xms{{ (ansible_memtotal_mb / 2) | int }}m" }
-    - { regexp: '^-Xmx', line: "-Xmx{{ (ansible_memtotal_mb / 2) | int }}m" }
+    - {regexp: '^-Xms', line: "-Xms{{ (ansible_memtotal_mb / 2) | int }}m"}
+    - {regexp: '^-Xmx', line: "-Xmx{{ (ansible_memtotal_mb / 2) | int }}m"}
   notify: restart wazuh-manager
 
 - name: Enable and start OpenSearch
@@ -119,9 +119,9 @@
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
   loop:
-    - { regexp: '^server.host:', line: "server.host: 0.0.0.0" }
-    - { regexp: '^server.port:', line: "server.port: 443" }
-    - { regexp: '^opensearch.hosts:', line: "opensearch.hosts: [\"https://127.0.0.1:9200\"]" }
+    - {regexp: '^server.host:', line: "server.host: 0.0.0.0"}
+    - {regexp: '^server.port:', line: "server.port: 443"}
+    - {regexp: '^opensearch.hosts:', line: "opensearch.hosts: [\"https://127.0.0.1:9200\"]"}
   notify: restart wazuh-dashboard
 
 - name: Enable and start Wazuh dashboard
@@ -138,13 +138,13 @@
     src: "{{ item.src }}"
     comment: "{{ item.comment }}"
   loop:
-    - { port: "1514", proto: udp, src: "10.0.0.0/8", comment: "Wazuh agent UDP" }
-    - { port: "1514", proto: tcp, src: "10.0.0.0/8", comment: "Wazuh agent TCP" }
-    - { port: "1515", proto: tcp, src: "10.0.0.0/8", comment: "Wazuh agent enrollment" }
-    - { port: "514", proto: udp, src: "10.0.0.0/8", comment: "Syslog ingest" }
-    - { port: "55000", proto: tcp, src: "10.0.10.0/24", comment: "Wazuh API from MGMT" }
-    - { port: "443", proto: tcp, src: "10.0.10.0/24", comment: "Wazuh dashboard from MGMT" }
-    - { port: "9200", proto: tcp, src: "10.0.40.0/24", comment: "OpenSearch API local" }
+    - {port: "1514", proto: udp, src: "10.0.0.0/8", comment: "Wazuh agent UDP"}
+    - {port: "1514", proto: tcp, src: "10.0.0.0/8", comment: "Wazuh agent TCP"}
+    - {port: "1515", proto: tcp, src: "10.0.0.0/8", comment: "Wazuh agent enrollment"}
+    - {port: "514", proto: udp, src: "10.0.0.0/8", comment: "Syslog ingest"}
+    - {port: "55000", proto: tcp, src: "10.0.10.0/24", comment: "Wazuh API from MGMT"}
+    - {port: "443", proto: tcp, src: "10.0.10.0/24", comment: "Wazuh dashboard from MGMT"}
+    - {port: "9200", proto: tcp, src: "10.0.40.0/24", comment: "OpenSearch API local"}
 
 - name: Wait for Wazuh manager to be fully started
   ansible.builtin.wait_for:

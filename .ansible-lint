@@ -20,4 +20,9 @@ warn_list:
 exclude_paths:
   - ansible/inventory/group_vars/all/vault.yml
   - .git/
-  - site/
+  - .ansible/
+  - site
+
+mock_modules:
+  - pfsensible.core.pfsense_unbound
+  - pfsensible.core.pfsense_unbound_host

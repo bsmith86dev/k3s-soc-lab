@@ -19,9 +19,11 @@
     marker: "# {mark} ANSIBLE MANAGED — WAZUH FORWARDING"
   notify: restart rsyslog
 
+
 - name: Configure local log retention
   ansible.builtin.copy:
     dest: /etc/logrotate.d/lab-common
+    mode: '0644'
     content: |
       /var/log/auth.log
       /var/log/syslog
@@ -38,7 +40,6 @@
               /usr/lib/rsyslog/rsyslog-rotate
           endscript
       }
-    mode: '0644'
 
 - name: Ensure log directories exist with correct permissions
   ansible.builtin.file:

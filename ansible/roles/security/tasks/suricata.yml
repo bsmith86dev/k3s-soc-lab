@@ -57,6 +57,7 @@
 - name: Configure logrotate for Suricata EVE logs
   ansible.builtin.copy:
     dest: /etc/logrotate.d/suricata
+    mode: '0644'
     content: |
       /var/log/suricata/*.log /var/log/suricata/*.json {
           daily
@@ -71,7 +72,6 @@
               /bin/kill -HUP $(cat /var/run/suricata.pid 2>/dev/null) 2>/dev/null || true
           endscript
       }
-    mode: '0644'
 
 - name: Enable and start Suricata
   ansible.builtin.systemd:

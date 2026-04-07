@@ -48,7 +48,7 @@ before it can be pushed. The CI pipeline runs the same check as a second gate.
 ### What gets scanned
 
 - AWS-style key patterns
-- Private key headers (BEGIN RSA PRIVATE KEY, etc.)
+- Private key headers (e.g., "BEGIN RSA [REDACTED]Y", etc.)
 - High-entropy strings
 - Common secret variable names (password=, token=, secret=)
 

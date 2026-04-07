@@ -107,12 +107,13 @@
     regexp: "{{ item.regexp }}"
     line: "{{ item.line }}"
   loop:
-    - { regexp: '^LogDir', line: "LogDir = /var/log/zeek" }
-    - { regexp: '^SpoolDir', line: "SpoolDir = /var/spool/zeek" }
+    - {regexp: '^LogDir', line: "LogDir = /var/log/zeek"}
+    - {regexp: '^SpoolDir', line: "SpoolDir = /var/spool/zeek"}
 
 - name: Configure logrotate for Zeek logs
   ansible.builtin.copy:
     dest: /etc/logrotate.d/zeek
+    mode: '0644'
     content: |
       /var/log/zeek/**/*.log {
           hourly
@@ -123,7 +124,6 @@
           notifempty
           sharedscripts
       }
-    mode: '0644'
 
 - name: Deploy zeekctl as systemd service
   ansible.builtin.copy:

@@ -73,7 +73,7 @@ common_packages_remove:
 # Override per host/group to open additional ports
 # Example:
 #   common_ufw_extra_rules:
-#     - { rule: allow, port: "8006", proto: tcp, src: "10.0.10.0/24", comment: "Proxmox web UI" }
+#     - {rule: allow, port: "8006", proto: tcp, src: "10.0.10.0/24", comment: "Proxmox web UI" }
 
 common_ufw_extra_rules: []
 

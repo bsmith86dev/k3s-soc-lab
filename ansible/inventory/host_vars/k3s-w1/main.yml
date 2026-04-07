@@ -3,6 +3,6 @@
 # Pi 5 — k3s worker node
 
 common_ufw_extra_rules:
-  - { rule: allow, port: "10250", proto: tcp, src: "10.0.20.0/24", comment: "kubelet metrics" }
-  - { rule: allow, port: "8472", proto: udp, src: "10.0.20.0/24", comment: "flannel VXLAN" }
-  - { rule: allow, port: "30000:32767", proto: tcp, src: "10.0.20.0/24", comment: "NodePort services" }
+  - {rule: allow, port: "10250", proto: tcp, src: "10.0.20.0/24", comment: "kubelet metrics"}
+  - {rule: allow, port: "8472", proto: udp, src: "10.0.20.0/24", comment: "flannel VXLAN"}
+  - {rule: allow, port: "30000:32767", proto: tcp, src: "10.0.20.0/24", comment: "NodePort services"}

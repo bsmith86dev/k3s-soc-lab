@@ -25,7 +25,7 @@
   gather_facts: no
 
   vars:
-    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    ansible_python_interpreter: "{{ansible_playbook_python }}"
 
   pre_tasks:
     - name: Verify pfSense is reachable

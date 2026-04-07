@@ -15,9 +15,9 @@
     direction: "{{ item.direction }}"
     policy: "{{ item.policy }}"
   loop:
-    - { direction: incoming, policy: deny }
-    - { direction: outgoing, policy: allow }
-    - { direction: routed, policy: deny }
+    - {direction: incoming, policy: deny}
+    - {direction: outgoing, policy: allow}
+    - {direction: routed, policy: deny}
 
 - name: Allow SSH from MGMT VLAN only
   community.general.ufw:
