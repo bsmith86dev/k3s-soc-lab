@@ -11,9 +11,9 @@
 #     Run once on AMDPVE:
 #       wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
 #       qm create 9000 --name ubuntu-24.04-template --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
-#       qm importdisk 9000 noble-server-cloudimg-amd64.img local-nvme
-#       qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-nvme:vm-9000-disk-0
-#       qm set 9000 --ide2 local-nvme:cloudinit --boot c --bootdisk scsi0
+#       qm importdisk 9000 noble-server-cloudimg-amd64.img local-lvm
+#       qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
+#       qm set 9000 --ide2 local-lvm:cloudinit --boot c --bootdisk scsi0
 #       qm set 9000 --serial0 socket --vga serial0
 #       qm template 9000
 #   - Proxmox API token in vault.yml
@@ -29,7 +29,7 @@
     node: "{{ item.node }}"
     clone: "{{ item.clone | default(proxmox_vm_template_id) }}"
     full: yes
-    storage: "{{ item.storage | default('local-nvme') }}"
+    storage: "{{ item.storage | default(proxmox_default_storage) }}"
     cores: "{{ item.cores | default(2) }}"
     sockets: "{{ item.sockets | default(1) }}"
     memory: "{{ item.memory | default(4096) }}"

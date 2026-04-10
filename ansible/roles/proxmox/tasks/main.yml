@@ -28,11 +28,6 @@
   tags: [proxmox, iommu]
   when: proxmox_enable_iommu | bool
 
-- name: Configure local ZFS storage
-  ansible.builtin.import_tasks: zfs.yml
-  tags: [proxmox, zfs]
-  when: proxmox_configure_zfs | bool
-
 - name: Add NFS storage backend (TrueNAS)
   ansible.builtin.import_tasks: storage-nfs.yml
   tags: [proxmox, storage, nfs]

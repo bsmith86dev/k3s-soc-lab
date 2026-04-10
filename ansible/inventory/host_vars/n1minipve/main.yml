@@ -3,11 +3,11 @@
 # Node-specific overrides for N1 Mini PVE
 # Hardware: Ryzen 7 5825U, 16GB DDR4
 
-proxmox_nic: "enp2s0"              # Verify with: ip link show
-proxmox_mgmt_ip: "10.0.10.21"
+proxmox_role: secondary
 
-# 16GB RAM — ARC limit 8GB
-proxmox_zfs_arc_max_bytes: 8589934592
+proxmox_nic: "nic0"              # Verify with: ip link show
+proxmox_mgmt_ip: "10.0.10.21"
+proxmox_ceph_pub_ip: "10.0.30.21"
 
 # No GPU on N1 Mini — IOMMU not needed
 proxmox_enable_iommu: false

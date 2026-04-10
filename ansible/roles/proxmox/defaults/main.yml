@@ -34,12 +34,10 @@ proxmox_mgmt_vlan: 10
 
 truenas_ip: "10.0.20.5"
 
-# ZFS ARC max — 50% of node RAM in bytes
-# AMDPVE (128GB): 64GB = 68719476736
-# N1 Mini (16GB): 8GB  = 8589934592
-proxmox_zfs_arc_max_bytes: 68719476736   # Override in host_vars for N1 Mini
-
-proxmox_configure_zfs: true
+# Default VM/LXC storage — local-lvm is the LVM thin pool on the OS NVMe
+# (created by Proxmox installer on nvme0n1p3 on both nodes)
+# Override per-item in proxmox_vms / proxmox_lxc_containers with item.storage
+proxmox_default_storage: "local-lvm"
 
 # ── IOMMU / PCIe passthrough ──────────────────────────────────────────────
 
