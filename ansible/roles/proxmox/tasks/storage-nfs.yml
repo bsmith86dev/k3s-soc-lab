@@ -5,7 +5,7 @@
 # Prerequisites:
 #   - TrueNAS Scale running on ZimaBoard (10.0.20.5)
 #   - NFS shares created on TrueNAS:
-#       /mnt/tank/backups   → Proxmox Backup Server
+#       /mnt/backup/proxmox → Proxmox Backup Server (mirrored pool)
 #       /mnt/tank/iso       → ISO images for VM installs
 #       /mnt/tank/media     → Jellyfin media library
 #   - NFS export permissions set to allow Proxmox node IPs
@@ -33,7 +33,7 @@
     cmd: >
       pvesm add nfs nfs-truenas-backups
       --server {{ truenas_ip }}
-      --export /mnt/tank/backups
+      --export /mnt/backup/proxmox
       --content backup,snippets
       --nodes {{ proxmox_cluster_nodes | join(',') }}
       --options vers=4

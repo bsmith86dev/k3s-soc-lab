@@ -85,17 +85,18 @@ ISP
 ### TrueNAS Scale — ZimaBoard 832
 | Pool | Devices | Type | Purpose |
 |------|---------|------|---------|
-| `tank` | 2x WD 16TB HC550 | Mirror | Primary NAS — NFS exports, backups |
-| `fast` | Crucial P3 Plus 2TB NVMe (Slot 1) | Single | High-speed dataset for Nextcloud, DB |
-| `b1` | Seagate 8TB USB | — | Replication target only |
-| `b2` | Seagate 6TB USB | — | Replication target only |
+| `tank` | sdb 14.55 TiB | Single | Primary NAS — media, arr, ISO |
+| `backup` | sdc + sdd 5.46 TiB each | Mirror | Proxmox Backup Server destination |
+| `fast` | nvme0n1 931.51 GiB | Single | High-speed dataset for Nextcloud, DB |
+| `archive` | sda 7.28 TiB | Single | ZFS replication target only (no exports) |
 
 ### NFS Exports (to Proxmox + k3s)
 | Export | Mount | Consumers |
 |--------|-------|-----------|
-| `/mnt/tank/backups` | `nfs-truenas-backups` | Proxmox Backup Server |
+| `/mnt/backup/proxmox` | `nfs-truenas-backups` | Proxmox Backup Server |
 | `/mnt/tank/iso` | `nfs-truenas-iso` | Proxmox ISO store |
 | `/mnt/tank/media` | k3s PVCs | Jellyfin, Radarr, Sonarr, Lidarr, etc. |
+| `/mnt/tank/arr` | k3s PVCs | ARR stack + downloads |
 | `/mnt/fast/nextcloud` | k3s PVC | Nextcloud data |
 
 ---

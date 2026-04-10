@@ -3,7 +3,8 @@
 
 ---
 
-## AMDPVE Node (Ryzen 9 7900X | 128GB DDR5 | 2TB NVMe)
+## AMDPVE Node (Ryzen 9 7900X | 128GB DDR5 | 1.8TB NVMe)
+
 **Role:** Security stack + Red/Purple team VMs + k3s heavy worker
 
 ### VM Allocation
@@ -58,7 +59,7 @@ iface eno1 inet manual
 # VLAN-aware bridge — single bridge handles ALL VLANs
 auto vmbr0
 iface vmbr0 inet static
-    address 10.0.10.10/24
+    address 10.0.10.20/24
     gateway 10.0.10.1
     bridge-ports eno1
     bridge-stp off
@@ -69,7 +70,7 @@ iface vmbr0 inet static
 # 10G NIC for Ceph/storage fabric (NICGIGA)
 auto eno2
 iface eno2 inet static
-    address 10.0.30.10/24
+    address 10.0.30.20/24
 ```
 
 ### VM Network Interface → VLAN Mapping
@@ -207,25 +208,32 @@ qm start 110
 ### Dataset Layout
 
 ```
-tank/                    ← Main pool (16TB WD + 8TB Seagate)
+tank/                    ← Primary pool (sdb, 14.55 TiB single drive)
 ├── media/               → NFS export → k3s media namespace
 │   ├── movies/
 │   ├── tv/
 │   └── music/
-├── nextcloud/           → NFS export → k3s personal namespace
-├── backups/             → Backup target (Proxmox backups, config backups)
-├── ceph/                → Ceph OSD (if ZimaBoard joins Ceph — optional)
-└── isos/                → Proxmox ISO storage
+├── arr/                 → NFS export → ARR stack + downloads
+└── iso/                 → NFS export → Proxmox ISO storage
 
-fast/                    ← Fast pool (1TB Crucial P310 NVMe)
-└── k8s-volumes/         → NFS export → Longhorn backup target
+backup/                  ← Mirrored backup pool (sdc + sdd, 5.46 TiB mirror)
+└── proxmox/             → NFS export → Proxmox Backup Server
+
+fast/                    ← NVMe pool (nvme0n1, 931.51 GiB)
+└── nextcloud/           → NFS export → Nextcloud data directory
+
+archive/                 ← Replication target only (sda, 7.28 TiB — no exports)
+├── tank/                ← ZFS replication of tank
+├── backup/              ← ZFS replication of backup
+└── fast/                ← ZFS replication of fast
 ```
 
 ### NFS Exports (TrueNAS UI → Shares → NFS)
 
 | Path | Network | Options |
 |------|---------|---------|
-| /mnt/tank/media | 10.0.20.0/24 | ro for Jellyfin, rw for *arr apps |
-| /mnt/tank/nextcloud | 10.0.20.0/24 | rw |
-| /mnt/tank/backups | 10.0.10.0/24, 10.0.20.0/24 | rw |
-| /mnt/fast/k8s-volumes | 10.0.20.0/24 | rw |
+| /mnt/tank/media | 10.0.20.0/24 | rw — Jellyfin + ARR apps |
+| /mnt/tank/arr | 10.0.20.0/24 | rw — downloads landing zone |
+| /mnt/tank/iso | 10.0.20.0/24 | rw — Proxmox ISO store |
+| /mnt/backup/proxmox | 10.0.20.0/24 | rw — Proxmox Backup Server |
+| /mnt/fast/nextcloud | 10.0.20.0/24 | rw — Nextcloud data |

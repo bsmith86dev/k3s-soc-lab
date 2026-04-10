@@ -8,17 +8,18 @@ Read `04-TRUENAS-STORAGE.md` for the architectural reasoning behind every decisi
 ## Prerequisites
 
 - ZimaBoard 832 powered off
-- Both WD 16TB HDDs physically installed in SATA bays
-- Crucial P3 Plus 2TB NVMe in M.2 Slot 1 only (Slot 2 empty)
-- USB externals connected (Seagate 8TB + 6TB)
+- Drives physically installed:
+  - SATA: sdb (14.55 TiB), sda (7.28 TiB), sdc (5.46 TiB), sdd (5.46 TiB)
+  - M.2: nvme0n1 (931.51 GiB NVMe)
 - Network cable connected to MokerLink Port 4
+- eMMC (mmcblk1, 29.12 GiB) used as TrueNAS OS boot drive
 
 ---
 
 ## Step 1 — Flash TrueNAS Scale to eMMC
 
-The ZimaBoard has 32GB internal eMMC. Flash TrueNAS Scale to it directly
-so the SATA ports are fully available for storage drives.
+The ZimaBoard has internal eMMC. Flash TrueNAS Scale to it directly
+so all SATA ports are available for storage drives.
 
 ```bash
 # On Skynet — download latest TrueNAS Scale ISO
@@ -30,7 +31,7 @@ sync
 ```
 
 1. Boot ZimaBoard from USB installer
-2. In installer: select eMMC as install target (`/dev/mmcblk0`)
+2. In installer: select eMMC as install target (`/dev/mmcblk1`)
 3. Set admin password during install
 4. Remove USB, reboot
 
@@ -53,11 +54,33 @@ Access web UI: `https://10.0.20.5`
 
 In TrueNAS web UI: **Storage → Create Pool**
 
-### tank (mirrored HDDs)
+Verify disk device assignments first: **Storage → Disks**
+
+Expected disk layout:
+| Device | Size | Pool |
+|--------|------|------|
+| sdb | 14.55 TiB | `tank` |
+| sda | 7.28 TiB | `archive` |
+| nvme0n1 | 931.51 GiB | `fast` |
+| sdc | 5.46 TiB | `backup` mirror |
+| sdd | 5.46 TiB | `backup` mirror |
+| mmcblk1 | 29.12 GiB | boot-pool (already set) |
+
+### tank (single 14.55 TiB drive — primary NAS)
 
 1. Pool name: `tank`
+2. Layout: Stripe (single disk)
+3. Add disk: sdb (14.55 TiB)
+4. Advanced → ashift: 12
+5. Create
+
+> Note: A second 16TB drive can be added later to mirror tank non-destructively.
+
+### backup (mirrored 6TB pair)
+
+1. Pool name: `backup`
 2. Layout: Mirror
-3. Add disks: both WD 16TB drives
+3. Add disks: sdc and sdd (both 5.46 TiB — matched pair)
 4. Advanced → ashift: 12
 5. Create
 
@@ -65,11 +88,19 @@ In TrueNAS web UI: **Storage → Create Pool**
 
 1. Pool name: `fast`
 2. Layout: Stripe (single disk)
-3. Add disk: Crucial P3 Plus NVMe (Slot 1)
+3. Add disk: nvme0n1 (931.51 GiB)
 4. Advanced → ashift: 12
 5. Create
 
-> **Do not add the Slot 2 NVMe** — leave it empty per the architecture doc.
+### archive (replication target)
+
+1. Pool name: `archive`
+2. Layout: Stripe (single disk)
+3. Add disk: sda (7.28 TiB)
+4. Advanced → ashift: 12
+5. Create
+
+> `archive` receives ZFS replication streams only — no NFS exports, no active workloads.
 
 ---
 
@@ -81,8 +112,13 @@ In TrueNAS web UI: **Storage → Create Pool**
 |---------|-----------|------|-------------|
 | `tank/media` | 1M | Standard | lz4 |
 | `tank/arr` | 128K | Standard | lz4 |
-| `tank/backups` | 128K | Always | lz4 |
 | `tank/iso` | 128K | Standard | lz4 |
+
+**Storage → backup → Add Dataset:**
+
+| Dataset | Recordsize | Sync | Compression |
+|---------|-----------|------|-------------|
+| `backup/proxmox` | 128K | Always | lz4 |
 
 **Storage → fast → Add Dataset:**
 
@@ -100,8 +136,8 @@ In TrueNAS web UI: **Storage → Create Pool**
 |------|-----------------|-------|
 | `/mnt/tank/media` | `10.0.20.0/24` | Jellyfin + ARR stack |
 | `/mnt/tank/arr` | `10.0.20.0/24` | Downloads directory |
-| `/mnt/tank/backups` | `10.0.20.0/24` | Proxmox Backup Server |
 | `/mnt/tank/iso` | `10.0.20.0/24` | Proxmox ISO store |
+| `/mnt/backup/proxmox` | `10.0.20.0/24` | Proxmox Backup Server |
 | `/mnt/fast/nextcloud` | `10.0.20.0/24` | Nextcloud data |
 
 Enable NFS service: **System → Services → NFS → Start Automatically → ON**
@@ -116,18 +152,26 @@ Enable NFS service: **System → Services → NFS → Start Automatically → ON
 |---------|----------|------|---------|
 | `tank` (recursive) | Hourly | 24 | Short-term recovery |
 | `tank` (recursive) | Daily | 30 | Medium-term recovery |
+| `backup` (recursive) | Daily | 30 | Backup pool snapshots |
 | `fast` (recursive) | Daily | 30 | Nextcloud data |
 
 ---
 
-## Step 7 — Configure Replication to USB Drives
+## Step 7 — Configure ZFS Replication to archive
 
 **Data Protection → Replication Tasks → Add**
 
-| Source | Destination | Schedule |
-|--------|-------------|----------|
-| `tank` | `b1` (Seagate 8TB) | Daily 02:00 |
-| `fast` | `b2` (Seagate 6TB) | Daily 03:00 |
+| Source | Destination | Schedule | Notes |
+|--------|-------------|----------|-------|
+| `tank` (recursive) | `archive/tank` | Daily 02:00 | Primary NAS to internal replication target |
+| `backup` (recursive) | `archive/backup` | Daily 03:00 | Backup pool to archive |
+| `fast` (recursive) | `archive/fast` | Daily 04:00 | Nextcloud to archive |
+
+The `archive` pool on sda (7.28 TiB) replaces the previous USB external drives (b1/b2).
+Create the destination datasets on `archive` before setting up replication tasks:
+- `archive/tank`
+- `archive/backup`
+- `archive/fast`
 
 ---
 
@@ -148,9 +192,14 @@ From Skynet, verify NFS is working:
 # Check what's exported
 showmount -e 10.0.20.5
 
-# Test mount
+# Test mount tank
 sudo mkdir -p /mnt/test-nfs
 sudo mount -t nfs 10.0.20.5:/mnt/tank/media /mnt/test-nfs
+df -h /mnt/test-nfs
+sudo umount /mnt/test-nfs
+
+# Test mount backup
+sudo mount -t nfs 10.0.20.5:/mnt/backup/proxmox /mnt/test-nfs
 df -h /mnt/test-nfs
 sudo umount /mnt/test-nfs
 ```

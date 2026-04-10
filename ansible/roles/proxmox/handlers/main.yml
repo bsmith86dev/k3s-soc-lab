@@ -51,3 +51,9 @@
     name: fail2ban
     state: restarted
   listen: "restart fail2ban"
+
+- name: Restart sshd
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+  listen: "restart sshd"

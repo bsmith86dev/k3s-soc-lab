@@ -3,7 +3,7 @@
 # Register Proxmox Backup Server as a storage backend
 #
 # PBS runs as an LXC or VM on one of the Proxmox nodes
-# and stores backups on the TrueNAS NFS mount (tank/backups)
+# and stores backups on the TrueNAS NFS mount (backup/proxmox)
 #
 # PBS connection details are stored in vault.yml:
 #   vault_pbs_host        — IP of PBS instance
@@ -15,12 +15,26 @@
 # Get PBS fingerprint:
 #   On PBS host: proxmox-backup-manager cert info | grep Fingerprint
 
+# ansible/roles/proxmox/tasks/storage-pbs.yml
+
 - name: Check if PBS storage already registered
   ansible.builtin.command:
     cmd: pvesm list pbs-truenas
   register: pbs_check
   changed_when: false
   failed_when: false
+  tags:
+    - pbs
+
+# 🔥 Pre-check: ensure PBS is reachable
+- name: Check PBS host connectivity
+  ansible.builtin.command:
+    cmd: ping -c 1 {{ vault_pbs_host }}
+  register: pbs_ping
+  changed_when: false
+  failed_when: false
+  tags:
+    - pbs
 
 - name: Register Proxmox Backup Server storage backend
   ansible.builtin.command:
@@ -38,9 +52,22 @@
   changed_when: pvesm_pbs.rc == 0
   failed_when:
     - pvesm_pbs.rc != 0
-    - "'already defined' not in pvesm_pbs.stderr"
-  when: pbs_check.rc != 0
-  no_log: true    # Suppress output — contains vault_pbs_password
+    - "'already defined' not in (pvesm_pbs.stderr | default(''))"
+  when:
+    - pbs_check.rc != 0
+    - pbs_ping.rc == 0
+  no_log: true
+  tags:
+    - pbs
+
+# 🔥 TEMP DEBUG (REMOVE LATER)
+- name: Debug PBS result (temporary)
+  ansible.builtin.debug:
+    var: pvesm_pbs
+  when: pvesm_pbs is defined
+  tags:
+    - pbs
+    - debug
 
 - name: Verify PBS storage is reachable
   ansible.builtin.command:
@@ -48,7 +75,15 @@
   register: pbs_status
   changed_when: false
   failed_when: false
+  when: pbs_ping.rc == 0
+  tags:
+    - pbs
 
 - name: Display PBS status
   ansible.builtin.debug:
     msg: "{{ pbs_status.stdout_lines }}"
+  when:
+    - pbs_status is defined
+    - not pbs_status.skipped | default(false)
+  tags:
+    - pbs

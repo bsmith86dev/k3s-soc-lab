@@ -70,7 +70,7 @@
   when: api_token.changed
   run_once: true
 
-- name: Configure HA groups for critical VMs
+- name: Configure HA groups for critical VMs (Proxmox <8.4 legacy)
   ansible.builtin.command:
     cmd: >
       ha-manager groupadd security-stack
@@ -81,6 +81,24 @@
   failed_when:
     - ha_group.rc != 0
     - "'already exists' not in ha_group.stderr"
+    - "'migrated to rules' not in ha_group.stderr"
+  run_once: true
+
+- name: Configure HA rules for critical VMs (Proxmox 8.4+ replacement for groups)
+  ansible.builtin.command:
+    cmd: >
+      pvesh create /cluster/ha/rules
+      --id security-stack
+      --nodes "amdpve:2,n1minipve:1"
+      --comment "Security stack VMs prefer AMDPVE"
+  register: ha_rule
+  changed_when: ha_rule.rc == 0
+  failed_when:
+    - ha_rule.rc != 0
+    - "'already exists' not in ha_rule.stderr"
+  when:
+    - ha_group is defined
+    - "'migrated to rules' in (ha_group.stderr | default(''))"
   run_once: true
 
 - name: Set cluster-wide CPU governor to performance

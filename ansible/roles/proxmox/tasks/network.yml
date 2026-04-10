@@ -15,9 +15,17 @@
 # ⚠️  Do NOT run this remotely if you only have one path in — you will
 #     lose connectivity. Run from console or ensure Tailscale is up first.
 
+- name: Ensure ifupdown2 is installed (required for non-disruptive reloads)
+  ansible.builtin.apt:
+    name: ifupdown2
+    state: present
+  tags:
+    - network
 - name: Check current network config
   ansible.builtin.stat:
     path: /etc/network/interfaces
+  tags:
+    - network
   register: net_interfaces
 
 - name: Back up current network interfaces file
@@ -25,6 +33,8 @@
     src: /etc/network/interfaces
     dest: "/etc/network/interfaces.bak-{{ ansible_date_time.date }}"
     remote_src: yes
+  tags:
+    - network
   when: net_interfaces.stat.exists
 
 - name: Deploy network interfaces config
@@ -34,10 +44,13 @@
     owner: root
     group: root
     mode: '0644'
-    validate: 'ifupdown2 --syntax-check %s'
-  notify: reload network interfaces
+  tags:
+    - network
+  check_mode: no
 
-- name: Ensure ifupdown2 is installed (required for non-disruptive reloads)
-  ansible.builtin.apt:
-    name: ifupdown2
-    state: present
+- name: Apply network config safely
+  command: ifreload -a
+  async: 30
+  poll: 0
+  tags:
+    - network

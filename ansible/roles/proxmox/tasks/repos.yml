@@ -3,19 +3,24 @@
 # Remove enterprise repo nag, enable no-subscription repo
 # Must run before packages.yml
 
-- name: Disable Proxmox enterprise repo
-  ansible.builtin.replace:
-    path: /etc/apt/sources.list.d/pve-enterprise.list
-    regexp: '^deb'
-    replace: '# deb'
-  ignore_errors: yes   # File may not exist on fresh install
+# ansible/roles/proxmox/tasks/repos.yml
+# Clean repo management + safe subscription nag patch
 
-- name: Disable Ceph enterprise repo
-  ansible.builtin.replace:
+- name: Remove Proxmox enterprise repo if present
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/pve-enterprise.list
+    state: absent
+  failed_when: false
+  tags:
+    - repos
+
+- name: Remove Ceph enterprise repo if present
+  ansible.builtin.file:
     path: /etc/apt/sources.list.d/ceph.list
-    regexp: '^deb'
-    replace: '# deb'
-  ignore_errors: yes
+    state: absent
+  failed_when: false
+  tags:
+    - repos
 
 - name: Add Proxmox no-subscription repo
   ansible.builtin.copy:
@@ -25,8 +30,10 @@
     owner: root
     group: root
     mode: '0644'
+  tags:
+    - repos
 
-- name: Add Ceph no-subscription repo
+- name: Add Ceph no-subscription repo (optional)
   ansible.builtin.copy:
     dest: /etc/apt/sources.list.d/ceph-no-subscription.list
     content: |
@@ -34,17 +41,25 @@
     owner: root
     group: root
     mode: '0644'
-  when: proxmox_install_ceph | bool
+  when: proxmox_install_ceph | default(false) | bool
+  tags:
+    - repos
 
 - name: Update apt cache
   ansible.builtin.apt:
-    update_cache: yes
+    update_cache: true
     cache_valid_time: 3600
+  tags:
+    - repos
 
-- name: Remove subscription nag from web UI
-  ansible.builtin.replace:
+# 🔥 SAFE version (no more OOM / killed process issues)
+- name: Disable subscription nag (safe patch)
+  ansible.builtin.lineinfile:
     path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
-    regexp: "res === null || res === undefined || !res || res"
-    replace: "false"
+    regexp: "data.status !== 'Active'"
+    line: "false"
+    backup: yes
   notify: restart pveproxy
-  ignore_errors: yes   # File path may change across PVE versions — non-fatal
+  failed_when: false
+  tags:
+    - proxmox
