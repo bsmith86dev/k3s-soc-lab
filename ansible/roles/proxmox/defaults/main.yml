@@ -34,10 +34,10 @@ proxmox_mgmt_vlan: 10
 
 truenas_ip: "10.0.20.5"
 
-# Default VM/LXC storage — local-lvm is the LVM thin pool on the OS NVMe
+# Default VM/LXC storage — local-zfs is the LVM thin pool on the OS NVMe
 # (created by Proxmox installer on nvme0n1p3 on both nodes)
 # Override per-item in proxmox_vms / proxmox_lxc_containers with item.storage
-proxmox_default_storage: "local-lvm"
+proxmox_default_storage: "local-zfs"
 
 # ── IOMMU / PCIe passthrough ──────────────────────────────────────────────
 

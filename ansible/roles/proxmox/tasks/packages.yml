@@ -30,7 +30,6 @@
       - smartmontools
       # Security
       - fail2ban
-      - ufw
       # Python (needed for Ansible modules)
       - python3
       - python3-pip

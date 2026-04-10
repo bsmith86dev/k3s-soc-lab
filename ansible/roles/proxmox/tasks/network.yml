@@ -54,3 +54,10 @@
   poll: 0
   tags:
     - network
+
+- name: Wait for node to be reachable after network reload
+  ansible.builtin.wait_for_connection:
+    delay: 5
+    timeout: 60
+  tags:
+    - network

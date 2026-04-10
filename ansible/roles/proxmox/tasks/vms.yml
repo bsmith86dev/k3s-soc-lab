@@ -11,25 +11,60 @@
 #     Run once on AMDPVE:
 #       wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
 #       qm create 9000 --name ubuntu-24.04-template --memory 2048 --cores 2 --net0 virtio,bridge=vmbr0
-#       qm importdisk 9000 noble-server-cloudimg-amd64.img local-lvm
-#       qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-lvm:vm-9000-disk-0
-#       qm set 9000 --ide2 local-lvm:cloudinit --boot c --bootdisk scsi0
+#       qm importdisk 9000 noble-server-cloudimg-amd64.img local-zfs
+#       qm set 9000 --scsihw virtio-scsi-pci --scsi0 local-zfs:vm-9000-disk-0
+#       qm set 9000 --ide2 local-zfs:cloudinit --boot c --bootdisk scsi0
 #       qm set 9000 --serial0 socket --vga serial0
 #       qm template 9000
 #   - Proxmox API token in vault.yml
 
-- name: Provision virtual machines from cloud-init template
+- name: Check if cloud-init VM template exists
+  ansible.builtin.command:
+    cmd: qm config {{ proxmox_vm_template_id }}
+  register: vm_template_check
+  changed_when: false
+  failed_when: false
+  run_once: true
+
+- name: Warn and skip VM provisioning if template missing
+  ansible.builtin.debug:
+    msg: >
+      WARNING: Cloud-init template VMID {{ proxmox_vm_template_id }} not found.
+      Skipping VM provisioning. Create the template on AMDPVE then rerun with --tags vms.
+  when: vm_template_check.rc != 0
+  run_once: true
+
+# proxmox_kvm clone: vmid = SOURCE template, newid = TARGET id, clone = new VM name
+- name: Clone VMs from cloud-init template
   community.general.proxmox_kvm:
     api_host: "{{ proxmox_api_host }}"
     api_user: "{{ proxmox_api_user }}@pam"
     api_token_id: "ansible"
     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
-    vmid: "{{ item.vmid }}"
-    name: "{{ item.name }}"
     node: "{{ item.node }}"
-    clone: "{{ item.clone | default(proxmox_vm_template_id) }}"
+    vmid: "{{ proxmox_vm_template_id }}"
+    newid: "{{ item.vmid }}"
+    clone: "{{ item.name }}"
     full: yes
     storage: "{{ item.storage | default(proxmox_default_storage) }}"
+    state: present
+  loop: "{{ proxmox_vms }}"
+  delegate_to: localhost
+  become: false
+  register: clone_result
+  failed_when:
+    - clone_result.failed | default(false)
+    - "'already exists' not in (clone_result.msg | default(''))"
+  when: vm_template_check.rc == 0
+
+- name: Configure cloned VMs (CPU, RAM, network, cloud-init)
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}@pam"
+    api_token_id: "ansible"
+    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
+    node: "{{ item.node }}"
+    vmid: "{{ item.vmid }}"
     cores: "{{ item.cores | default(2) }}"
     sockets: "{{ item.sockets | default(1) }}"
     memory: "{{ item.memory | default(4096) }}"
@@ -43,12 +78,15 @@
     sshkeys: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
     ciuser: "{{ item.ciuser | default('techinb') }}"
     description: "{{ item.description | default('') }}"
-    tags: "{{ item.tags | default([]) | join(';') }}"
+    tags: "{{ item.tags | default([]) }}"
     onboot: "{{ item.onboot | default(true) }}"
-    agent: "enabled=1"   # Requires qemu-guest-agent installed in VM
+    agent: "enabled=1"
+    update: yes
     state: present
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
+  become: false
+  when: vm_template_check.rc == 0
 
 - name: Resize VM disks to specified size
   community.general.proxmox_disk:
@@ -62,6 +100,8 @@
     state: resized
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
+  become: false
+  when: vm_template_check.rc == 0
 
 - name: Start virtual machines
   community.general.proxmox_kvm:
@@ -74,12 +114,16 @@
     state: started
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
+  become: false
+  when: vm_template_check.rc == 0
 
 - name: Wait for VMs to be reachable via SSH
   ansible.builtin.wait_for:
     host: "{{ item.ip }}"
     port: 22
     delay: 10
-    timeout: 120
+    timeout: 300
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
+  become: false
+  when: vm_template_check.rc == 0

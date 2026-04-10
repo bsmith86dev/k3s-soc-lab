@@ -32,11 +32,6 @@
     - update grub
     - reboot host
 
-- name: Update GRUB
-  ansible.builtin.command:
-    cmd: update-grub
-  when: iommu_grub_check.stdout == "0"
-
 - name: Ensure VFIO kernel modules load at boot
   ansible.builtin.blockinfile:
     path: /etc/modules-load.d/vfio.conf
@@ -69,11 +64,6 @@
     marker: "# {mark} ANSIBLE MANAGED — VFIO PCI IDS"
   when: proxmox_vfio_pci_ids is defined and proxmox_vfio_pci_ids | length > 0
   notify: update initramfs
-
-- name: Update initramfs after VFIO changes
-  ansible.builtin.command:
-    cmd: update-initramfs -u -k all
-  changed_when: true
 
 - name: Verify IOMMU is active (post-reboot check)
   ansible.builtin.shell:

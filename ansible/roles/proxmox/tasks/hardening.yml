@@ -51,32 +51,25 @@
     cmd: sysctl --system
   changed_when: true
 
-- name: Configure Proxmox built-in firewall — enable on cluster
-  ansible.builtin.lineinfile:
-    path: /etc/pve/firewall/cluster.fw
-    create: yes
-    line: "{{ item }}"
-  loop:
-    - "[OPTIONS]"
-    - "enable: 1"
-    - "policy_in: DROP"
-    - "policy_out: ACCEPT"
-  run_once: true   # cluster.fw is replicated by pmxcfs
+- name: Configure Proxmox cluster firewall (options + rules)
+  ansible.builtin.shell:
+    cmd: |
+      cat > /etc/pve/firewall/cluster.fw << 'EOF'
+      [OPTIONS]
+      enable: 1
+      policy_in: DROP
+      policy_out: ACCEPT
 
-- name: Allow Proxmox web UI through PVE firewall (MGMT only)
-  ansible.builtin.blockinfile:
-    path: /etc/pve/firewall/cluster.fw
-    block: |
       [RULES]
       IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 8006 -log info # Proxmox web UI from MGMT
       IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 22 -log info   # SSH from MGMT
       IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 3128 -log info # SPICE proxy from MGMT
       IN ACCEPT -p tcp -dport 5405:5412 -log nolog                  # Corosync cluster comms
       IN ACCEPT -p udp -dport 5405:5412 -log nolog                  # Corosync cluster comms
-      IN DROP   -log warning                                         # Drop everything else
-    marker: "# {mark} ANSIBLE MANAGED — CLUSTER FIREWALL RULES"
-    insertafter: "\\[OPTIONS\\]"
-  run_once: true
+      IN DROP -log warning                                           # Drop everything else
+      EOF
+  changed_when: true
+  run_once: true   # cluster.fw is replicated by pmxcfs; pmxcfs FUSE doesn't support chmod/atomic rename
 
 - name: Install auditd for security event logging
   ansible.builtin.apt:

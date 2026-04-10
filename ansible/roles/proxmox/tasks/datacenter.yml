@@ -7,18 +7,18 @@
 # It is replicated automatically across all cluster nodes by pmxcfs
 
 - name: Set datacenter options
-  ansible.builtin.blockinfile:
-    path: /etc/pve/datacenter.cfg
-    create: yes
-    block: |
+  ansible.builtin.shell:
+    cmd: |
+      cat > /etc/pve/datacenter.cfg << 'EOF'
       console: xtermjs
       keyboard: en-us
       language: en
       max_workers: 3
       migration_unsecure: 0
       ha: shutdown_policy=failover
-    marker: "# {mark} ANSIBLE MANAGED — DATACENTER CONFIG"
-  run_once: true    # Only needs to run on one node — pmxcfs replicates it
+      EOF
+  changed_when: true
+  run_once: true    # Only needs to run on one node — pmxcfs replicates it; FUSE doesn't support chmod/atomic rename
 
 - name: Create Ansible API user in Proxmox
   ansible.builtin.command:
@@ -70,7 +70,7 @@
   when: api_token.changed
   run_once: true
 
-- name: Configure HA groups for critical VMs (Proxmox <8.4 legacy)
+- name: Configure HA groups for critical VMs (Proxmox <8.4)
   ansible.builtin.command:
     cmd: >
       ha-manager groupadd security-stack
@@ -78,27 +78,19 @@
       --comment "Security stack VMs prefer AMDPVE"
   register: ha_group
   changed_when: ha_group.rc == 0
-  failed_when:
-    - ha_group.rc != 0
-    - "'already exists' not in ha_group.stderr"
-    - "'migrated to rules' not in ha_group.stderr"
+  failed_when: false   # Non-fatal — HA groups deprecated in Proxmox 8.4+
   run_once: true
 
-- name: Configure HA rules for critical VMs (Proxmox 8.4+ replacement for groups)
-  ansible.builtin.command:
-    cmd: >
-      pvesh create /cluster/ha/rules
-      --id security-stack
-      --nodes "amdpve:2,n1minipve:1"
-      --comment "Security stack VMs prefer AMDPVE"
-  register: ha_rule
-  changed_when: ha_rule.rc == 0
-  failed_when:
-    - ha_rule.rc != 0
-    - "'already exists' not in ha_rule.stderr"
+- name: Warn if HA group creation not supported
+  ansible.builtin.debug:
+    msg: >
+      NOTE: HA group/rule configuration is not automated.
+      In Proxmox 8.4+, ha-manager groups have been replaced with a rules system.
+      After VMs are created, configure HA node preference manually in the
+      Proxmox web UI: Datacenter → HA → Add Resource for each VM.
   when:
     - ha_group is defined
-    - "'migrated to rules' in (ha_group.stderr | default(''))"
+    - ha_group.rc != 0
   run_once: true
 
 - name: Set cluster-wide CPU governor to performance

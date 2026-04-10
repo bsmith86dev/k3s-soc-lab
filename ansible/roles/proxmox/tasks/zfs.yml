@@ -3,15 +3,15 @@
 # Local ZFS pool configuration — NOT APPLICABLE on current hardware
 #
 # Both PVE nodes have their NVMe drives fully occupied by the Proxmox OS install:
-#   amdpve:   nvme0n1 (1.8T) — p1 BIOS boot, p2 EFI, p3 Proxmox system (local-lvm)
-#   n1minipve: nvme0n1 (931.5G) — p1 BIOS boot, p2 EFI, p3 Proxmox system (local-lvm)
+#   amdpve:   nvme0n1 (1.8T) — p1 BIOS boot, p2 EFI, p3 Proxmox system (local-zfs)
+#   n1minipve: nvme0n1 (931.5G) — p1 BIOS boot, p2 EFI, p3 Proxmox system (local-zfs)
 #
 # All spinning/SATA disks are Ceph OSDs:
 #   amdpve:   sda (698.6G), sdb (1.8T), sdc (1.8T)
 #   n1minipve: sda (931.5G)
 #
 # VM and LXC disk storage uses:
-#   - local-lvm  (LVM thin pool on OS NVMe — images, rootdir)
+#   - local-zfs  (LVM thin pool on OS NVMe — images, rootdir)
 #   - ceph-rbd   (Ceph distributed block storage — if configured)
 #   - nfs-truenas (TrueNAS NFS — ISOs, templates, backups)
 #

@@ -10,6 +10,10 @@
 #     Download: pveam download nfs-truenas-iso ubuntu-24.04-standard_24.04-2_amd64.tar.zst
 #   - Storage backends registered (storage-nfs.yml complete)
 
+- name: Set default LXC template name
+  ansible.builtin.set_fact:
+    lxc_template_name: "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+
 - name: Check if NFS ISO storage is available
   ansible.builtin.command:
     cmd: pvesm status --storage nfs-truenas-iso
@@ -24,15 +28,41 @@
   when: nfs_iso_check.rc != 0
   run_once: true
 
+- name: Update available LXC template list from Proxmox repos
+  ansible.builtin.command:
+    cmd: pveam update
+  changed_when: false
+  when: nfs_iso_check.rc == 0
+  run_once: true
+
+- name: Find latest Ubuntu 24.04 LXC template name
+  ansible.builtin.shell:
+    cmd: pveam available --section system | awk '/ubuntu-24.04-standard/ {print $2}' | sort -V | tail -1
+  register: lxc_template_name_raw
+  changed_when: false
+  when: nfs_iso_check.rc == 0
+  run_once: true
+
+- name: Update LXC template name from repo listing
+  ansible.builtin.set_fact:
+    lxc_template_name: "{{ lxc_template_name_raw.stdout }}"
+  when:
+    - nfs_iso_check.rc == 0
+    - lxc_template_name_raw.stdout | default('') | length > 0
+  run_once: true
+
 - name: Download Ubuntu 24.04 LXC template if not present
   ansible.builtin.command:
-    cmd: pveam download nfs-truenas-iso ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+    cmd: pveam download nfs-truenas-iso {{ lxc_template_name }}
   register: template_download
   changed_when: template_download.rc == 0
   failed_when:
     - template_download.rc != 0
     - "'already exists' not in template_download.stderr"
-  when: nfs_iso_check.rc == 0
+    - "'already downloaded' not in template_download.stdout"
+  when:
+    - nfs_iso_check.rc == 0
+    - lxc_template_name | length > 0
   run_once: true
 
 - name: Provision LXC containers
@@ -44,7 +74,7 @@
     vmid: "{{ item.vmid }}"
     hostname: "{{ item.hostname }}"
     node: "{{ item.node }}"
-    ostemplate: "{{ item.ostemplate | default('nfs-truenas-iso:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst') }}"
+    ostemplate: "{{ item.ostemplate | default('nfs-truenas-iso:vztmpl/' + lxc_template_name) }}"
     storage: "{{ item.storage | default(proxmox_default_storage) }}"
     disk: "{{ item.disk | default('20') }}"
     cores: "{{ item.cores | default(2) }}"
@@ -60,6 +90,8 @@
     state: present
   loop: "{{ proxmox_lxc_containers }}"
   delegate_to: localhost
+  become: false
+  when: nfs_iso_check.rc == 0
 
 - name: Start LXC containers
   community.general.proxmox:
@@ -72,6 +104,8 @@
     state: started
   loop: "{{ proxmox_lxc_containers }}"
   delegate_to: localhost
+  become: false
+  when: nfs_iso_check.rc == 0
 
 - name: Wait for LXC containers to be reachable
   ansible.builtin.wait_for:
@@ -81,3 +115,5 @@
     timeout: 60
   loop: "{{ proxmox_lxc_containers }}"
   delegate_to: localhost
+  become: false
+  when: nfs_iso_check.rc == 0

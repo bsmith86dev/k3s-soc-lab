@@ -60,15 +60,6 @@
   tags:
     - pbs
 
-# 🔥 TEMP DEBUG (REMOVE LATER)
-- name: Debug PBS result (temporary)
-  ansible.builtin.debug:
-    var: pvesm_pbs
-  when: pvesm_pbs is defined
-  tags:
-    - pbs
-    - debug
-
 - name: Verify PBS storage is reachable
   ansible.builtin.command:
     cmd: pvesm status --storage pbs-truenas

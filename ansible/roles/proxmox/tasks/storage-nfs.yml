@@ -43,6 +43,7 @@
     - pvesm_backups.rc != 0
     - "'already defined' not in pvesm_backups.stderr"
   when: nfs_check.rc == 0
+  run_once: true   # storage.cfg is cluster-wide — pmxcfs replicates it
 
 - name: Register NFS ISO storage backend
   ansible.builtin.command:
@@ -59,6 +60,7 @@
     - pvesm_iso.rc != 0
     - "'already defined' not in pvesm_iso.stderr"
   when: nfs_check.rc == 0
+  run_once: true   # storage.cfg is cluster-wide — pmxcfs replicates it
 
 - name: Verify storage backends registered
   ansible.builtin.command:
