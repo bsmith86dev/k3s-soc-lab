@@ -52,7 +52,15 @@ proxmox_vfio_pci_ids: ""
 # ── VM template ───────────────────────────────────────────────────────────
 
 proxmox_vm_template_id: 9000        # Ubuntu 24.04 cloud-init template VMID
+proxmox_vm_template_name: "ubuntu-24.04-template"  # must match `qm config <id>` name field
 
+# Optional SSH readiness check for newly provisioned VMs.
+# Keep enabled to verify cloud-init networking, but do not fail the play by default
+# because the Ansible control host may not have L3 access to every VM VLAN.
+proxmox_wait_for_ssh: true
+proxmox_wait_for_ssh_delay: 10
+proxmox_wait_for_ssh_timeout: 300
+proxmox_wait_for_ssh_strict: false
 # ── LXC containers to provision ───────────────────────────────────────────
 
 proxmox_provision_lxc: true

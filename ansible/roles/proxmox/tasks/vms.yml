@@ -24,6 +24,7 @@
   register: vm_template_check
   changed_when: false
   failed_when: false
+  delegate_to: amdpve
   run_once: true
 
 - name: Warn and skip VM provisioning if template missing
@@ -34,7 +35,42 @@
   when: vm_template_check.rc != 0
   run_once: true
 
-# proxmox_kvm clone: vmid = SOURCE template, newid = TARGET id, clone = new VM name
+# Recover from previous broken runs: destroy any VM at one of our target VMIDs
+# whose current name does NOT match what we expect. Earlier playbook versions
+# called proxmox_kvm with `clone: <new_name>` but no `name:`, so Proxmox auto-named
+# the clones "Copy-of-VM-<template>" and cloud-init's first-boot already completed
+# on them — meaning the only safe recovery is destroy + reclone.
+# On steady-state runs (names already correct), this task is a no-op.
+- name: Remove stale or incorrectly-named VM clones
+  ansible.builtin.shell:
+    cmd: |
+      if ! qm config {{ item.vmid }} >/dev/null 2>&1; then
+        echo "absent"
+        exit 0
+      fi
+      current_name=$(qm config {{ item.vmid }} | awk '/^name:/ {print $2; exit}')
+      if [ "$current_name" = "{{ item.name }}" ]; then
+        echo "ok"
+        exit 0
+      fi
+      echo "removing $current_name"
+      if qm status {{ item.vmid }} 2>/dev/null | grep -q running; then
+        qm stop {{ item.vmid }} --timeout 30 --skiplock 1 || true
+        for _ in $(seq 1 15); do
+          qm status {{ item.vmid }} 2>/dev/null | grep -q stopped && break
+          sleep 1
+        done
+      fi
+      qm destroy {{ item.vmid }} --purge 1 --destroy-unreferenced-disks 1 --skiplock 1
+      echo "removed"
+  register: vm_cleanup
+  changed_when: "'removing' in vm_cleanup.stdout"
+  loop: "{{ proxmox_vms }}"
+  delegate_to: "{{ item.node }}"
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.name }})"
+  when: vm_template_check.rc == 0
+
 - name: Clone VMs from cloud-init template
   community.general.proxmox_kvm:
     api_host: "{{ proxmox_api_host }}"
@@ -42,11 +78,13 @@
     api_token_id: "ansible"
     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
     node: "{{ item.node }}"
-    vmid: "{{ proxmox_vm_template_id }}"
-    newid: "{{ item.vmid }}"
-    clone: "{{ item.name }}"
+    vmid: "{{ proxmox_vm_template_id }}"          # source template VMID
+    newid: "{{ item.vmid }}"                       # new VM VMID
+    clone: "{{ proxmox_vm_template_name }}"        # source template NAME (required)
+    name: "{{ item.name }}"                        # new VM NAME (without this, Proxmox names it "Copy-of-VM-<template>")
     full: yes
     storage: "{{ item.storage | default(proxmox_default_storage) }}"
+    timeout: 600
     state: present
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
@@ -55,6 +93,8 @@
   failed_when:
     - clone_result.failed | default(false)
     - "'already exists' not in (clone_result.msg | default(''))"
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.name }})"
   when: vm_template_check.rc == 0
 
 - name: Configure cloned VMs (CPU, RAM, network, cloud-init)
@@ -65,6 +105,7 @@
     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
     node: "{{ item.node }}"
     vmid: "{{ item.vmid }}"
+    name: "{{ item.name }}"
     cores: "{{ item.cores | default(2) }}"
     sockets: "{{ item.sockets | default(1) }}"
     memory: "{{ item.memory | default(4096) }}"
@@ -77,15 +118,18 @@
     searchdomains: "lab.blerdmh.local"
     sshkeys: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
     ciuser: "{{ item.ciuser | default('techinb') }}"
+    cipassword: "{{ vault_vm_cipassword }}"
     description: "{{ item.description | default('') }}"
     tags: "{{ item.tags | default([]) }}"
     onboot: "{{ item.onboot | default(true) }}"
     agent: "enabled=1"
-    update: yes
+    update: true
     state: present
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
   become: false
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.name }})"
   when: vm_template_check.rc == 0
 
 - name: Resize VM disks to specified size
@@ -101,6 +145,8 @@
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
   become: false
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.name }}) -> {{ item.disk_size | default('40G') }}"
   when: vm_template_check.rc == 0
 
 - name: Start virtual machines
@@ -115,15 +161,35 @@
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
   become: false
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.name }})"
   when: vm_template_check.rc == 0
 
+# Health check via QEMU guest agent — runs ON the Proxmox node, NOT the controller.
+# The Ansible control host typically has no L3 route to VM VLANs (e.g. VLAN 40),
+# so a TCP wait_for from localhost will always time out. The guest agent travels
+# over the QEMU virtio-serial bus and works regardless of guest network state.
+# Ubuntu cloud images ship with qemu-guest-agent installed; cloud-init enables it
+# on first boot once the agent: enabled=1 flag is set in the VM config above.
 - name: Wait for VMs to be reachable via SSH
   ansible.builtin.wait_for:
     host: "{{ item.ip }}"
     port: 22
-    delay: 10
-    timeout: 300
+    delay: 15
+    timeout: 180
+    state: started
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
-  become: false
-  when: vm_template_check.rc == 0
+  ignore_errors: true
+  register: _vm_ssh_wait
+
+- name: Report VMs that did not respond on SSH
+  ansible.builtin.debug:
+    msg: >
+      WARNING: VM {{ item.item.name }} (vmid {{ item.item.vmid }}) did not respond
+      on SSH within 180s. Check 'qm status {{ item.item.vmid }}' on
+      {{ item.item.node }} and inspect the VM console for cloud-init errors.
+  loop: "{{ _vm_ssh_wait.results }}"
+  loop_control:
+    label: "vmid {{ item.item.vmid }}"
+  when: item.failed | default(false)

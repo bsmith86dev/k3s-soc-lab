@@ -22,28 +22,17 @@
   tags:
     - repos
 
-- name: Add Proxmox no-subscription repo
-  ansible.builtin.copy:
-    dest: /etc/apt/sources.list.d/pve-no-subscription.list
-    content: |
-      deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription
-    owner: root
-    group: root
-    mode: '0644'
-  tags:
-    - repos
+- name: Add PVE no-subscription repo
+  ansible.builtin.apt_repository:
+    repo: "deb http://download.proxmox.com/debian/pve {{ ansible_distribution_release }} pve-no-subscription"
+    filename: pve-no-subscription
+    state: present
 
-- name: Add Ceph no-subscription repo (optional)
-  ansible.builtin.copy:
-    dest: /etc/apt/sources.list.d/ceph-no-subscription.list
-    content: |
-      deb http://download.proxmox.com/debian/ceph-reef bookworm no-subscription
-    owner: root
-    group: root
-    mode: '0644'
-  when: proxmox_install_ceph | default(false) | bool
-  tags:
-    - repos
+- name: Add Ceph no-subscription repo
+  ansible.builtin.apt_repository:
+    repo: "deb http://download.proxmox.com/debian/ceph-squid {{ ansible_distribution_release }} no-subscription"
+    filename: ceph-no-subscription
+    state: present
 
 - name: Update apt cache
   ansible.builtin.apt:

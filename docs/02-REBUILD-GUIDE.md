@@ -50,7 +50,7 @@ cp ansible/inventory/group_vars/all/vault.yml.example \
 
 # Edit vault.yml — fill in ALL values marked CHANGEME
 # Then encrypt:
-ansible-vault encrypt ansible/inventory/group_vars/all/vault.yml
+
 ```
 
 ### 0.4 Configure GitHub Actions secrets

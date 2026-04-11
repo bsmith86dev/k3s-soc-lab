@@ -3,6 +3,7 @@
 # Ansible vault plaintext
 ansible/inventory/group_vars/all/vault.yml.plain
 *.vault.plain
+.vault_pass
 
 # Kubeconfigs
 *.kubeconfig
@@ -46,6 +47,7 @@ build/
 
 # Ansible
 *.retry
+.ansible/
 
 # MkDocs build
 site/
@@ -86,4 +88,3 @@ tmp/
 # pfSense backups contain hashed passwords — safe to commit but large
 # Uncomment to exclude:
 # switch/pfsense-backup-*.xml
-.ansible/
