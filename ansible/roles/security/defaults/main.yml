@@ -4,4 +4,4 @@
 # Interface Suricata and Zeek listen on
 # This should be a promiscuous/span port interface on ids-vm
 # Add a second vNIC in Proxmox with no VLAN tag for mirror traffic
-suricata_capture_interface: "ens19"   # Second NIC on ids-vm — verify with ip link show
+security_suricata_capture_interface: "ens19"   # Second NIC on ids-vm — verify with ip link show

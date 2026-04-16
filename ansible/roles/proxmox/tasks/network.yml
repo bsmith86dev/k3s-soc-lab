@@ -32,7 +32,8 @@
   ansible.builtin.copy:
     src: /etc/network/interfaces
     dest: "/etc/network/interfaces.bak-{{ ansible_date_time.date }}"
-    remote_src: yes
+    remote_src: true
+    mode: '0644'
   tags:
     - network
   when: net_interfaces.stat.exists
@@ -46,12 +47,13 @@
     mode: '0644'
   tags:
     - network
-  check_mode: no
+  check_mode: false
 
 - name: Apply network config safely
-  command: ifreload -a
+  ansible.builtin.command: ifreload -a
   async: 30
   poll: 0
+  changed_when: true
   tags:
     - network
 

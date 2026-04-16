@@ -21,7 +21,7 @@
     repo: "deb [signed-by=/usr/share/keyrings/zeek-archive-keyring.asc] https://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /"
     filename: zeek
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Install Zeek
   ansible.builtin.apt:
@@ -53,7 +53,7 @@
       [worker-1]
       type=worker
       host=localhost
-      interface={{ suricata_capture_interface }}
+      interface={{ security_suricata_capture_interface }}
       lb_method=pf_ring
       lb_procs=2
     mode: '0644'
@@ -69,7 +69,8 @@
 - name: Configure Zeek local.zeek — enable extra log sources
   ansible.builtin.blockinfile:
     path: /opt/zeek/share/zeek/site/local.zeek
-    create: yes
+    create: true
+    mode: '0644'
     block: |
       # Load standard frameworks
       @load base/frameworks/software
@@ -159,9 +160,9 @@
 - name: Enable and start Zeek
   ansible.builtin.systemd:
     name: zeek
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Verify Zeek is running
   ansible.builtin.command:

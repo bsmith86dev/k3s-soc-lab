@@ -22,12 +22,13 @@
 
 - name: Reload systemd daemon
   ansible.builtin.systemd:
-    daemon_reload: yes
+    daemon_reload: true
   listen: "reload systemd"
 
 - name: Update initramfs
   ansible.builtin.command:
     cmd: update-initramfs -u -k all
+  changed_when: true
   listen: "update initramfs"
 
 - name: Reboot host
@@ -39,11 +40,13 @@
 - name: Update GRUB
   ansible.builtin.command:
     cmd: update-grub
+  changed_when: true
   listen: "update grub"
 
 - name: Reload network interfaces
   ansible.builtin.command:
     cmd: ifreload -a
+  changed_when: true
   listen: "reload network interfaces"
 
 - name: Restart fail2ban

@@ -34,7 +34,7 @@
     url: https://get.k3s.io
     dest: /tmp/k3s-install.sh
     mode: '0755'
-    force: yes
+    force: true
   when: not k3s_binary.stat.exists
 
 - name: Install k3s server
@@ -55,12 +55,13 @@
       --node-ip {{ ansible_host }}
       --advertise-address {{ ansible_host }}
   when: not k3s_binary.stat.exists
+  changed_when: not k3s_binary.stat.exists
   notify: restart k3s server
 
 - name: Ensure k3s server is enabled and started
   ansible.builtin.systemd:
     name: k3s
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Wait for k3s API server to be ready
@@ -83,7 +84,7 @@
   ansible.builtin.command:
     cmd: >
       k3s kubectl apply -f
-      https://raw.githubusercontent.com/metallb/metallb/v{{ metallb_version }}/config/manifests/metallb-native.yaml
+      https://raw.githubusercontent.com/metallb/metallb/v{{ k3s_metallb_version }}/config/manifests/metallb-native.yaml
   register: metallb_install
   changed_when: "'configured' in metallb_install.stdout or 'created' in metallb_install.stdout"
   environment:
@@ -103,6 +104,7 @@
 - name: Deploy MetalLB IP address pool
   ansible.builtin.copy:
     dest: /tmp/metallb-pool.yml
+    mode: '0644'
     content: |
       apiVersion: metallb.io/v1beta1
       kind: IPAddressPool
@@ -111,7 +113,7 @@
         namespace: metallb-system
       spec:
         addresses:
-          - {{ metallb_ip_range }}
+          - {{ k3s_metallb_ip_range }}
       ---
       apiVersion: metallb.io/v1beta1
       kind: L2Advertisement
@@ -131,7 +133,7 @@
   ansible.builtin.command:
     cmd: >
       k3s kubectl apply -f
-      https://github.com/cert-manager/cert-manager/releases/download/v{{ cert_manager_version }}/cert-manager.yaml
+      https://github.com/cert-manager/cert-manager/releases/download/v{{ k3s_cert_manager_version }}/cert-manager.yaml
   register: certmgr_install
   changed_when: "'configured' in certmgr_install.stdout or 'created' in certmgr_install.stdout"
   environment:
@@ -152,7 +154,7 @@
   ansible.builtin.command:
     cmd: >
       k3s kubectl apply -f
-      https://github.com/bitnami-labs/sealed-secrets/releases/download/v{{ sealed_secrets_version }}/controller.yaml
+      https://github.com/bitnami-labs/sealed-secrets/releases/download/v{{ k3s_sealed_secrets_version }}/controller.yaml
   register: sealedsec_install
   changed_when: "'configured' in sealedsec_install.stdout or 'created' in sealedsec_install.stdout"
   environment:

@@ -22,7 +22,7 @@
       - lsb-release
       - gnupg2
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Add Wazuh GPG key
   ansible.builtin.get_url:
@@ -42,13 +42,13 @@
   ansible.builtin.apt:
     name: "wazuh-manager={{ wazuh_version }}-*"
     state: present
-    update_cache: yes
+    update_cache: true
   when: not wazuh_installed.stat.exists
 
 - name: Enable and start Wazuh manager
   ansible.builtin.systemd:
     name: wazuh-manager
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Add OpenSearch GPG key
@@ -67,7 +67,7 @@
   ansible.builtin.apt:
     name: opensearch
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Configure OpenSearch for Wazuh
   ansible.builtin.blockinfile:
@@ -105,7 +105,7 @@
 - name: Enable and start OpenSearch
   ansible.builtin.systemd:
     name: opensearch
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Install Wazuh dashboard
@@ -127,7 +127,7 @@
 - name: Enable and start Wazuh dashboard
   ansible.builtin.systemd:
     name: wazuh-dashboard
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Configure UFW for Wazuh manager

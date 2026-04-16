@@ -14,7 +14,7 @@
   ansible.builtin.apt_repository:
     repo: ppa:oisf/suricata-stable
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Install Suricata
   ansible.builtin.apt:
@@ -76,7 +76,7 @@
 - name: Enable and start Suricata
   ansible.builtin.systemd:
     name: suricata
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Create systemd timer for daily rule updates
@@ -112,9 +112,9 @@
 - name: Enable Suricata update timer
   ansible.builtin.systemd:
     name: suricata-update.timer
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Verify Suricata is running
   ansible.builtin.command:

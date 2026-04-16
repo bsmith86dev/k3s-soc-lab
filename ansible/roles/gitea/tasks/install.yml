@@ -5,10 +5,10 @@
 - name: Create git system user
   ansible.builtin.user:
     name: git
-    system: yes
+    system: true
     shell: /bin/bash
     home: /home/git
-    create_home: yes
+    create_home: true
     comment: "Gitea service account"
 
 - name: Create Gitea directories
@@ -86,9 +86,9 @@
 - name: Enable and start Gitea
   ansible.builtin.systemd:
     name: gitea
-    enabled: yes
+    enabled: true
     state: started
-    daemon_reload: yes
+    daemon_reload: true
 
 - name: Wait for Gitea to be ready
   ansible.builtin.wait_for:

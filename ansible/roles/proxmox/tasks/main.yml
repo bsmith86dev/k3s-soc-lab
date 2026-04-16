@@ -8,16 +8,71 @@
 #   - SSH key deployed to root
 #   - Node reachable at its MGMT VLAN IP (10.0.10.x)
 #
-# Run order is intentional — do not reorder
-# Each task file is independently taggable for surgical re-runs
+# ── Tag taxonomy ────────────────────────────────────────────────────────────
+#
+#   Atomic tags (one task file each):
+#     repos        APT sources (no-subscription, Ceph, non-free)
+#     packages     qemu-guest-agent, nfs-common, tools
+#     network      Linux bridge configuration (vmbr0 vlan-aware)
+#     iommu        GRUB + kernel flags for PCIe passthrough
+#     nfs          TrueNAS NFS storage backend
+#     pbs          Proxmox Backup Server storage backend
+#     datacenter   HA, console, bandwidth, migration policy
+#     hardening    SSH config, kernel params, auditd, login banner
+#     lxc          LXC container provisioning
+#     vms          VM (QEMU/KVM) provisioning
+#
+#   Composite meta-tags (span multiple task files):
+#     proxmox      everything in this role
+#     base         repos + packages + datacenter + hardening
+#     storage      nfs + pbs
+#     provision    lxc + vms
+#
+# ── Usage examples ──────────────────────────────────────────────────────────
+#
+#   Full run:
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml
+#
+#   Dry-run diff (safe for any tag):
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml \
+#       --check --diff --tags <tag>
+#
+#   Re-run only VM provisioning (after destroying and rebuilding):
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml \
+#       --tags vms
+#
+#   Re-run only LXC provisioning:
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml \
+#       --tags lxc
+#
+#   Re-run all provisioning (wipe + rebuild day):
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml \
+#       --tags provision
+#
+#   Re-run storage backends only (TrueNAS or PBS changed):
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml \
+#       --tags storage
+#
+#   Apply base OS hardening only:
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml \
+#       --tags hardening
+#
+#   Skip provisioning (node config only):
+#     ansible-playbook -i inventory/hosts.yml playbooks/05-proxmox.yml \
+#       --skip-tags provision
+#
+# ── Task order is intentional — do not reorder ──────────────────────────────
+#   repos must run before packages (apt sources must exist first)
+#   network must run before provisioning (VMs need vlan-aware bridges)
+#   iommu requires a reboot before passthrough VMs will start cleanly
 
 - name: Configure package repositories
   ansible.builtin.import_tasks: repos.yml
-  tags: [proxmox, repos]
+  tags: [proxmox, repos, base]
 
 - name: Install required packages
   ansible.builtin.import_tasks: packages.yml
-  tags: [proxmox, packages]
+  tags: [proxmox, packages, base]
 
 - name: Configure network bridges
   ansible.builtin.import_tasks: network.yml
@@ -38,18 +93,18 @@
 
 - name: Configure datacenter options
   ansible.builtin.import_tasks: datacenter.yml
-  tags: [proxmox, datacenter]
+  tags: [proxmox, datacenter, base]
 
 - name: Harden Proxmox node
   ansible.builtin.import_tasks: hardening.yml
-  tags: [proxmox, hardening]
+  tags: [proxmox, hardening, base]
 
 - name: Provision LXC containers
   ansible.builtin.import_tasks: lxc.yml
-  tags: [proxmox, lxc]
+  tags: [proxmox, lxc, provision]
   when: proxmox_provision_lxc | bool
 
 - name: Provision virtual machines
   ansible.builtin.import_tasks: vms.yml
-  tags: [proxmox, vms]
+  tags: [proxmox, vms, provision]
   when: proxmox_provision_vms | bool

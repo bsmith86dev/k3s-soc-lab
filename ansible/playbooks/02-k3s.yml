@@ -13,8 +13,8 @@
 
 - name: Pre-flight and k3s control plane
   hosts: k3s_control_plane
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
   roles:
     - k3s
   tags:
@@ -23,8 +23,8 @@
 
 - name: K3s worker nodes
   hosts: k3s_workers
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
   serial: 1           # Join workers one at a time — avoids token race condition
   roles:
     - k3s

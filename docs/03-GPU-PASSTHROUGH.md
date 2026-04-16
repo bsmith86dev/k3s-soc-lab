@@ -219,7 +219,7 @@ Add to `ansible/roles/k3s/tasks/worker.yml` for k3s-worker-amd specifically:
   user:
     name: labadmin
     groups: render,video
-    append: yes
+    append: true
   when: inventory_hostname == 'k3s-worker-amd'
 ```
 

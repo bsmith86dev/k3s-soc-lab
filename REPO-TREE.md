@@ -96,7 +96,7 @@ blerdmh-lab/
 │       │   └── tasks/
 │       │       ├── main.yml
 │       │       ├── aliases.yml                      # RFC1918, MGMT_HOSTS, K3S_NODES, SECURITY_VMS…
-│       │       ├── vlans.yml                        # VLANs 10–70 on igb1
+│       │       ├── vlans.yml                        # VLANs 10–70 on igc1
 │       │       ├── rules.yml                        # Full inter-VLAN ruleset all 8 VLANs
 │       │       ├── dns.yml                          # Unbound + host registrations
 │       │       └── dhcp.yml                         # DHCP pools + static MAC reservations

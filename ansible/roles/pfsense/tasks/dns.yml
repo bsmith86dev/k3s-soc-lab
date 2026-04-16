@@ -1,85 +1,101 @@
 ---
 # ansible/roles/pfsense/tasks/dns.yml
-# pfSense Unbound DNS resolver configuration
-# Handles internal lab.blerdmh.local resolution + split-horizon for blerdmh.com
+# pfSense Unbound DNS resolver configuration via pfSense-pkg-RESTAPI v2
+#
+# API base: /api/v2/  (package: pfrest/pfSense-pkg-RESTAPI >= v2.7.6)
+# Auth: HTTP Basic Auth — admin credentials from vault
+# All tasks delegate_to: localhost — REST calls run from the control node.
+#
+# Pattern: GET existing overrides → compare → POST only missing entries.
+# This makes the task idempotent without relying on pfSense returning 409
+# (it returns 400 + response_id "MODEL_FIELDS_NOT_UNIQUE_TOGETHER" instead).
+#
+# To add a host: append to pfsense_dns_overrides in defaults/main.yml.
 
 - name: "DNS | Configure Unbound resolver settings"
-  pfsensible.core.pfsense_unbound:
-    enabled: true
-    dnssec: true
-    forwarding: false          # Resolve recursively, don't forward to ISP
-    port: 53
-    active_interface: "all"
-    outgoing_interface: "WAN"
-    custom_options: |
-      server:
-        private-domain: "lab.blerdmh.local"
-        private-domain: "home.blerdmh.local"
-        local-zone: "10.0.10.in-addr.arpa." static
-        local-zone: "20.0.10.in-addr.arpa." static
-        local-zone: "40.0.10.in-addr.arpa." static
-    state: present
-  delegate_to: "{{ pfsense_host }}"
+  ansible.builtin.uri:
+    url: "https://{{ pfsense_host }}/api/v2/services/dns_resolver/settings"
+    method: PATCH
+    user: "{{ pfsense_user }}"
+    password: "{{ pfsense_password }}"
+    validate_certs: false
+    force_basic_auth: true
+    body_format: json
+    body:
+      enable: true
+      dnssec: true
+      forwarding: false
+      port: "53"
+      active_interface:
+        - "all"
+      outgoing_interface:
+        - "wan"
+      custom_options: |
+        server:
+          private-domain: "lab.blerdmh.local"
+          private-domain: "home.blerdmh.local"
+          local-zone: "10.0.10.in-addr.arpa." static
+          local-zone: "20.0.10.in-addr.arpa." static
+          local-zone: "40.0.10.in-addr.arpa." static
+  register: pfsense_unbound_config
+  failed_when: pfsense_unbound_config.status not in [200, 201, 204]
+  delegate_to: localhost
 
-- name: "DNS | Register — pfSense gateway"
-  pfsensible.core.pfsense_unbound_host:
-    host: "pfsense"
-    domain: "lab.blerdmh.local"
-    ip: "10.0.10.1"
-    descr: "pfSense firewall / gateway"
-    state: present
-  delegate_to: "{{ pfsense_host }}"
+- name: "DNS | Get existing host overrides from Unbound"
+  ansible.builtin.uri:
+    url: "https://{{ pfsense_host }}/api/v2/services/dns_resolver/host_overrides"
+    method: GET
+    user: "{{ pfsense_user }}"
+    password: "{{ pfsense_password }}"
+    validate_certs: false
+    force_basic_auth: true
+  register: pfsense_existing_dns
+  delegate_to: localhost
 
-- name: "DNS | Register — AMDPVE"
-  pfsensible.core.pfsense_unbound_host:
-    host: "amdpve"
-    domain: "lab.blerdmh.local"
-    ip: "10.0.10.20"
-    descr: "AMDPVE primary Proxmox node"
-    state: present
-  delegate_to: "{{ pfsense_host }}"
+- name: "DNS | Build list of existing host.domain pairs"
+  ansible.builtin.set_fact:
+    pfsense_pfsense_existing_dns_fqdns: >-
+      {{
+        pfsense_existing_dns.json.data
+        | map(attribute='host')
+        | zip(pfsense_existing_dns.json.data | map(attribute='domain'))
+        | map('join', '.')
+        | list
+      }}
 
-- name: "DNS | Register — N1 Mini PVE"
-  pfsensible.core.pfsense_unbound_host:
-    host: "n1minipve"
-    domain: "lab.blerdmh.local"
-    ip: "10.0.10.21"
-    descr: "N1 Mini secondary Proxmox node"
-    state: present
-  delegate_to: "{{ pfsense_host }}"
+- name: "DNS | Create missing host overrides"
+  ansible.builtin.uri:
+    url: "https://{{ pfsense_host }}/api/v2/services/dns_resolver/host_override"
+    method: POST
+    user: "{{ pfsense_user }}"
+    password: "{{ pfsense_password }}"
+    validate_certs: false
+    force_basic_auth: true
+    body_format: json
+    body:
+      host: "{{ item.host }}"
+      domain: "{{ item.domain }}"
+      ip:
+        - "{{ item.ip }}"
+      descr: "{{ item.descr }}"
+  loop: "{{ pfsense_dns_overrides }}"
+  when: (item.host ~ '.' ~ item.domain) not in pfsense_pfsense_existing_dns_fqdns
+  register: pfsense_dns_result
+  failed_when: >
+    pfsense_dns_result.status not in [200, 201, 204] and
+    (pfsense_dns_result.json.response_id | default('')) != 'MODEL_FIELDS_NOT_UNIQUE_TOGETHER'
+  delegate_to: localhost
 
-- name: "DNS | Register — TrueNAS"
-  pfsensible.core.pfsense_unbound_host:
-    host: "truenas"
-    domain: "lab.blerdmh.local"
-    ip: "10.0.20.5"
-    descr: "ZimaBoard TrueNAS Scale"
-    state: present
-  delegate_to: "{{ pfsense_host }}"
-
-- name: "DNS | Register — k3s control plane"
-  pfsensible.core.pfsense_unbound_host:
-    host: "k3s-cp"
-    domain: "lab.blerdmh.local"
-    ip: "10.0.20.10"
-    descr: "Pi 4 k3s control plane"
-    state: present
-  delegate_to: "{{ pfsense_host }}"
-
-- name: "DNS | Register — k3s worker 1"
-  pfsensible.core.pfsense_unbound_host:
-    host: "k3s-w1"
-    domain: "lab.blerdmh.local"
-    ip: "10.0.20.11"
-    descr: "Pi 5 k3s worker node"
-    state: present
-  delegate_to: "{{ pfsense_host }}"
-
-- name: "DNS | Register — Gitea (N1 Mini LXC)"
-  pfsensible.core.pfsense_unbound_host:
-    host: "gitea"
-    domain: "lab.blerdmh.local"
-    ip: "10.0.10.50"
-    descr: "Self-hosted Gitea on N1 Mini LXC 302"
-    state: present
-  delegate_to: "{{ pfsense_host }}"
+- name: "DNS | Apply Unbound changes (reload resolver)"
+  ansible.builtin.uri:
+    url: "https://{{ pfsense_host }}/api/v2/services/dns_resolver/apply"
+    method: POST
+    user: "{{ pfsense_user }}"
+    password: "{{ pfsense_password }}"
+    validate_certs: false
+    force_basic_auth: true
+    body_format: json
+    body: {}
+  register: pfsense_dns_apply
+  failed_when: pfsense_dns_apply.status not in [200, 201, 204]
+  delegate_to: localhost

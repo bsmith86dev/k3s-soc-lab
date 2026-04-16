@@ -29,9 +29,11 @@
 - name: Reload suricata rules
   ansible.builtin.command:
     cmd: suricatasc -c reload-rules
+  changed_when: true
   listen: "reload suricata rules"
 
 - name: Reload zeek scripts
   ansible.builtin.command:
     cmd: zeekctl deploy
+  changed_when: true
   listen: "reload zeek scripts"

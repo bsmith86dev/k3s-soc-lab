@@ -10,7 +10,6 @@
     address: "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
     descr: "All private RFC1918 address space"
     state: present
-  delegate_to: "{{ pfsense_host }}"
 
 - name: Create alias — MGMT_HOSTS (admin workstations)
   pfsensible.core.pfsense_alias:
@@ -19,7 +18,6 @@
     address: "10.0.10.10"   # Skynet workstation
     descr: "Authorized management hosts"
     state: present
-  delegate_to: "{{ pfsense_host }}"
 
 - name: Create alias — K3S_NODES (individual k3s host IPs)
   pfsensible.core.pfsense_alias:
@@ -28,7 +26,6 @@
     address: "10.0.20.10 10.0.20.11 10.0.20.12 10.0.20.13"
     descr: "k3s control plane and worker nodes — host type (individual IPs)"
     state: present
-  delegate_to: "{{ pfsense_host }}"
 
 - name: Create alias — SECURITY_VMS (VLAN 40 security stack hosts)
   pfsensible.core.pfsense_alias:
@@ -37,7 +34,6 @@
     address: "10.0.40.10 10.0.40.11 10.0.40.12 10.0.40.13"
     descr: "Wazuh, IDS, OpenVAS, Grafana VMs — host type (individual IPs)"
     state: present
-  delegate_to: "{{ pfsense_host }}"
 
 - name: Create alias — NAS_HOST
   pfsensible.core.pfsense_alias:
@@ -46,7 +42,6 @@
     address: "10.0.20.5"   # ZimaBoard TrueNAS
     descr: "TrueNAS Scale on ZimaBoard"
     state: present
-  delegate_to: "{{ pfsense_host }}"
 
 - name: Create alias — DNS_SERVERS
   pfsensible.core.pfsense_alias:
@@ -55,7 +50,6 @@
     address: "10.0.10.1 10.0.10.3"
     descr: "pfSense DNS + secondary resolver"
     state: present
-  delegate_to: "{{ pfsense_host }}"
 
 - name: Create alias — PROXMOX_NODES
   pfsensible.core.pfsense_alias:
@@ -64,7 +58,6 @@
     address: "10.0.10.20 10.0.10.21"
     descr: "AMDPVE (10.0.10.20) and N1 Mini PVE (10.0.10.21)"
     state: present
-  delegate_to: "{{ pfsense_host }}"
 
 - name: Create alias — TAILSCALE_SUBNET
   pfsensible.core.pfsense_alias:
@@ -73,4 +66,31 @@
     address: "100.64.0.0/10"
     descr: "Tailscale CGNAT range"
     state: present
-  delegate_to: "{{ pfsense_host }}"
+
+# ── Port aliases (multi-port groups for firewall rules) ────────────────────
+# pfsense_rule destination_port only accepts a single port or alias name;
+# space-separated lists must be defined here as port-type aliases.
+
+- name: Create alias — NFS_PORTS (portmapper + NFS + mountd)
+  pfsensible.core.pfsense_alias:
+    name: NFS_PORTS
+    type: port
+    address: "111 2049 20048"
+    descr: "NFSv4 ports: portmapper (111), NFS (2049), mountd (20048)"
+    state: present
+
+- name: Create alias — PBS_API_PORT (Proxmox Backup Server API)
+  pfsensible.core.pfsense_alias:
+    name: PBS_API_PORT
+    type: port
+    address: "8007"
+    descr: "Proxmox Backup Server web/API port"
+    state: present
+
+- name: Create alias — WAZUH_PORTS (agent comms + syslog)
+  pfsensible.core.pfsense_alias:
+    name: WAZUH_PORTS
+    type: port
+    address: "514 1514 1515"
+    descr: "Wazuh: syslog (514), agent (1514), enrollment (1515)"
+    state: present

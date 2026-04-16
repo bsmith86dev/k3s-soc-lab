@@ -14,8 +14,8 @@
 
 - name: Deploy k3s workloads from manifests
   hosts: k3s_control_plane
-  gather_facts: no
-  become: no
+  gather_facts: false
+  become: false
 
   vars:
     kubeconfig: "/home/{{ ansible_user }}/.kube/config-blerdmh-lab"
@@ -112,6 +112,7 @@
         - {name: nextcloud, namespace: personal}
         - {name: homeassistant, namespace: homeauto}
         - {name: jellyfin, namespace: media}
+      changed_when: false
       failed_when: false
       tags: [workloads, verify]
 

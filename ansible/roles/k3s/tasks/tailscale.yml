@@ -32,12 +32,12 @@
   ansible.builtin.apt:
     name: tailscale
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Enable and start tailscaled
   ansible.builtin.systemd:
     name: tailscaled
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Enable IP forwarding for subnet routing
@@ -46,7 +46,7 @@
     value: "1"
     state: present
     sysctl_file: /etc/sysctl.d/99-tailscale.conf
-    reload: yes
+    reload: true
   loop:
     - net.ipv4.ip_forward
     - net.ipv6.conf.all.forwarding
@@ -77,6 +77,7 @@
   when:
     - not tailscale_authenticated | bool
     - vault_tailscale_auth_key is defined
+  changed_when: true
   no_log: true
 
 - name: Update advertised routes if already authenticated

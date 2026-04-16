@@ -11,8 +11,8 @@
 
 - name: Deploy Gitea on N1 Mini LXC
   hosts: gitea
-  become: yes
-  gather_facts: yes
+  become: true
+  gather_facts: true
   roles:
     - gitea
   tags:

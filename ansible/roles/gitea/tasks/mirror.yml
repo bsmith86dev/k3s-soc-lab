@@ -14,7 +14,7 @@
     method: GET
     user: "{{ gitea_admin_user }}"
     password: "{{ vault_gitea_admin_password }}"
-    force_basic_auth: yes
+    force_basic_auth: true
     status_code: [200, 404]
   register: mirror_check
   no_log: true
@@ -25,7 +25,7 @@
     method: POST
     user: "{{ gitea_admin_user }}"
     password: "{{ vault_gitea_admin_password }}"
-    force_basic_auth: yes
+    force_basic_auth: true
     body_format: json
     body:
       clone_addr: "https://github.com/{{ gitea_github_user }}/blerdmh-lab.git"
@@ -46,7 +46,7 @@
     method: POST
     user: "{{ gitea_admin_user }}"
     password: "{{ vault_gitea_admin_password }}"
-    force_basic_auth: yes
+    force_basic_auth: true
     status_code: [200]
   when: mirror_check.status == 404
   no_log: true

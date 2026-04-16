@@ -15,7 +15,7 @@
 
 - name: Verify NFS connectivity to TrueNAS
   ansible.builtin.command:
-    cmd: showmount -e {{ truenas_ip }}
+    cmd: showmount -e {{ proxmox_truenas_ip }}
   register: nfs_check
   changed_when: false
   failed_when: false
@@ -23,7 +23,7 @@
 - name: Warn if TrueNAS NFS not reachable
   ansible.builtin.debug:
     msg: >
-      WARNING: TrueNAS NFS at {{ truenas_ip }} not reachable.
+      WARNING: TrueNAS NFS at {{ proxmox_truenas_ip }} not reachable.
       Skipping NFS storage registration.
       Ensure TrueNAS is online and NFS shares are configured.
   when: nfs_check.rc != 0
@@ -32,7 +32,7 @@
   ansible.builtin.command:
     cmd: >
       pvesm add nfs nfs-truenas-backups
-      --server {{ truenas_ip }}
+      --server {{ proxmox_truenas_ip }}
       --export /mnt/backup/proxmox
       --content backup,snippets
       --nodes {{ proxmox_cluster_nodes | join(',') }}
@@ -49,7 +49,7 @@
   ansible.builtin.command:
     cmd: >
       pvesm add nfs nfs-truenas-iso
-      --server {{ truenas_ip }}
+      --server {{ proxmox_truenas_ip }}
       --export /mnt/tank/iso
       --content iso,vztmpl
       --nodes {{ proxmox_cluster_nodes | join(',') }}

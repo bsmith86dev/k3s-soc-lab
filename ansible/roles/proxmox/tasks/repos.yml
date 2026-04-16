@@ -47,7 +47,7 @@
     path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
     regexp: "data.status !== 'Active'"
     line: "false"
-    backup: yes
+    backup: true
   notify: restart pveproxy
   failed_when: false
   tags:

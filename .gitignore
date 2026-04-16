@@ -4,11 +4,13 @@
 ansible/inventory/group_vars/all/vault.yml.plain
 *.vault.plain
 .vault_pass
+ansible/inventory/group_vars/**/vault.yml
 
 # Kubeconfigs
-*.kubeconfig
+*.kubeconfig*
 kubeconfig
 .kube/
+kubeconfig.*
 
 # SSH keys
 *.pem
@@ -33,6 +35,18 @@ secrets.yaml
 .env
 .env.*
 !.env.example
+*.envrc
+
+# Logs
+*.log
+logs/
+
+# Ansible collections (installed dependencies)
+ansible/collections/
+
+# Ansible runtime junk
+*.cache
+facts/
 
 # ── Tool artifacts ────────────────────────────────────────────────────────
 
@@ -68,6 +82,7 @@ Thumbs.db
 .idea/
 .vscode/
 *.code-workspace
+.claude
 
 # ── Lab-specific ──────────────────────────────────────────────────────────
 
@@ -84,6 +99,13 @@ tmp/
 *.iso
 *.img
 *.firmware
+
+# Tailscale
+tailscale.state
+
+# Docker
+*.pid
+*.sock
 
 # pfSense backups contain hashed passwords — safe to commit but large
 # Uncomment to exclude:

@@ -72,7 +72,7 @@ In GitHub repo → Settings → Secrets → Actions, add:
 ### 1.1 pfSense — initial setup (manual)
 
 1. Install pfSense CE on Glovary i3-N355 via USB
-2. Assign interfaces: `igb0` = WAN, `igb1` = LAN
+2. Assign interfaces: `igc0` = WAN, `igc1` = LAN
 3. Set LAN IP to `10.0.10.1/24`
 4. Access web UI at `http://10.0.10.1` from Skynet
 5. Complete setup wizard — set admin password, configure WAN

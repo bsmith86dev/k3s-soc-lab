@@ -11,9 +11,9 @@
 - name: Remove systemd-timesyncd (conflicts with chrony)
   ansible.builtin.systemd:
     name: systemd-timesyncd
-    enabled: no
+    enabled: false
     state: stopped
-  ignore_errors: yes
+  failed_when: false
 
 - name: Configure chrony NTP
   ansible.builtin.copy:
@@ -44,14 +44,14 @@
 - name: Enable and start chrony
   ansible.builtin.systemd:
     name: chrony
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Force chrony time sync on first run
   ansible.builtin.command:
     cmd: chronyc makestep
   changed_when: false
-  ignore_errors: yes
+  failed_when: false
 
 - name: Verify time sync status
   ansible.builtin.command:

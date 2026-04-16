@@ -87,4 +87,4 @@ common_disabled_services:
 
 # ── Wazuh ─────────────────────────────────────────────────────────────────
 
-wazuh_manager_ip: "10.0.40.10"
+common_wazuh_manager_ip: "10.0.40.10"

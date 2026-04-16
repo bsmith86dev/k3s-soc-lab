@@ -18,6 +18,7 @@
 - name: Reload ufw
   ansible.builtin.command:
     cmd: ufw reload
+  changed_when: false
   listen: "reload ufw"
 
 - name: Restart unattended-upgrades

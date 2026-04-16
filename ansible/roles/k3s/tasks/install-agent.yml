@@ -34,7 +34,7 @@
     url: https://get.k3s.io
     dest: /tmp/k3s-install.sh
     mode: '0755'
-    force: yes
+    force: true
   when: not k3s_binary.stat.exists
 
 - name: Install k3s agent
@@ -49,6 +49,7 @@
       --node-ip {{ ansible_host }}
       --node-label kubernetes.io/hostname={{ inventory_hostname }}
   when: not k3s_binary.stat.exists
+  changed_when: not k3s_binary.stat.exists
   notify: restart k3s agent
 
 - name: Label GPU worker node
@@ -60,13 +61,14 @@
       --overwrite
   delegate_to: "{{ groups['k3s_control_plane'][0] }}"
   when: has_amd_gpu | default(false) | bool
+  changed_when: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Ensure k3s agent is enabled and started
   ansible.builtin.systemd:
     name: k3s-agent
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Wait for agent node to appear in cluster

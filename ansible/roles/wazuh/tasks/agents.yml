@@ -34,7 +34,7 @@
   ansible.builtin.apt:
     name: "wazuh-agent={{ wazuh_version }}-*"
     state: present
-    update_cache: yes
+    update_cache: true
   when: not agent_installed.stat.exists
 
 - name: Configure Wazuh agent — set manager IP
@@ -67,7 +67,7 @@
 - name: Enable and start Wazuh agent
   ansible.builtin.systemd:
     name: wazuh-agent
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Wait for agent to connect to manager

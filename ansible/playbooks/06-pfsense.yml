@@ -3,43 +3,54 @@
 # Configures pfSense CE firewall
 #
 # IMPORTANT — Read before running:
-#   1. This playbook connects to pfSense via its web UI API (pfsensible.core)
-#      NOT via SSH. pfSense must be reachable at 10.0.10.1.
-#   2. Run aliases and VLANs BEFORE rules — rules reference aliases.
-#   3. DHCP reservations require real MAC addresses set in vault.yml first.
-#   4. Test connectivity before running: curl -k https://10.0.10.1
+#   1. This playbook connects to pfSense via SSH (pfsensible.core accesses /cf/conf/config.xml).
+#      pfSense must be reachable at 10.0.10.1 with SSH enabled.
+#   2. SSH credentials configured in ansible/inventory/hosts.yml (pfsense host).
+#   3. Run aliases and VLANs BEFORE rules — rules reference aliases.
+#   4. DHCP reservations require real MAC addresses set in vault.yml first.
+#   5. Test SSH connectivity: ssh -i ~/.ssh/id_ed25519 admin@10.0.10.1
 #
 # Install collection first:
 #   ansible-galaxy collection install pfsensible.core
 #
-# Run order (safe incremental approach):
-#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags aliases
-#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags vlans
-#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags rules
-#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags dns
-#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml --tags dhcp
+# First-ever run on a fresh pfSense (installs Python + API, then everything):
+#   ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml \
+#     --vault-password-file .vault_pass
+#
+# Recommended incremental order after bootstrap has run once:
+#   --tags bootstrap           (idempotent; safe to re-run)
+#   --tags "setup,network"     (ntp + vlans + interfaces + nat)
+#   --tags policy              (aliases + rules — aliases must exist first)
+#   --tags services            (setup + dns + dhcp)
+#
+# Single-concern re-runs (assumes bootstrap + network already done):
+#   --tags aliases | vlans | interfaces | rules | dns | dhcp
 
 - name: Configure pfSense firewall
-  hosts: localhost          # pfsensible.core delegates to pfsense_host directly
-  connection: local
-  gather_facts: no
-
-  vars:
-    ansible_python_interpreter: "{{ansible_playbook_python }}"
+  hosts: pfsense
+  gather_facts: false
 
   pre_tasks:
-    - name: Verify pfSense is reachable
+    - name: Verify pfSense is reachable (from control node)
       ansible.builtin.uri:
         url: "https://10.0.10.1"
-        validate_certs: no
+        validate_certs: false
         status_code: [200, 301, 302]
       register: pfsense_check
       failed_when: false
+      delegate_to: localhost
+      run_once: true
 
     - name: Abort if pfSense unreachable
       ansible.builtin.fail:
         msg: "pfSense at 10.0.10.1 is not reachable. Check network connectivity."
       when: pfsense_check.status is not defined or pfsense_check.status == -1
+      delegate_to: localhost
+      run_once: true
+
+  # NOTE: we can't stat /cf/conf/config.xml here because Python may not
+  # be installed yet on a fresh pfSense — the bootstrap role handles that.
+  # The role's bootstrap tasks use `raw` and don't require Python.
 
   roles:
     - pfsense

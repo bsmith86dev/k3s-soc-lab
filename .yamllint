@@ -1,0 +1,14 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 160
+    level: warning
+
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+  trailing-spaces: enable
+  new-line-at-end-of-file: enable

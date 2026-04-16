@@ -20,9 +20,10 @@
       --email {{ gitea_admin_email }}
       --admin
       --must-change-password=false
-  become: yes
+  become: true
   become_user: git
   when: admin_check.status == 404
+  changed_when: admin_check.status == 404
   no_log: true
 
 - name: Disable public registration via API
@@ -31,7 +32,7 @@
     method: GET
     user: "{{ gitea_admin_user }}"
     password: "{{ vault_gitea_admin_password }}"
-    force_basic_auth: yes
+    force_basic_auth: true
     status_code: [200]
   register: gitea_api_check
   failed_when: false
@@ -42,7 +43,7 @@
     method: POST
     user: "{{ gitea_admin_user }}"
     password: "{{ vault_gitea_admin_password }}"
-    force_basic_auth: yes
+    force_basic_auth: true
     body_format: json
     body:
       username: "blerdmh"

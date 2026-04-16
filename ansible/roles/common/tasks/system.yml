@@ -35,7 +35,7 @@
     value: "{{ item.value }}"
     state: present
     sysctl_file: /etc/sysctl.d/99-lab-common.conf
-    reload: yes
+    reload: true
   loop:
     - {key: "net.ipv4.tcp_syncookies", value: "1"}
     - {key: "net.ipv4.conf.all.accept_redirects", value: "0"}
@@ -50,7 +50,8 @@
 - name: Disable core dumps
   ansible.builtin.blockinfile:
     path: /etc/security/limits.d/no-core-dumps.conf
-    create: yes
+    create: true
+    mode: '0644'
     block: |
       * hard core 0
       * soft core 0
@@ -70,7 +71,7 @@
 - name: Disable unnecessary services
   ansible.builtin.systemd:
     name: "{{ item }}"
-    enabled: no
+    enabled: false
     state: stopped
   loop: "{{ common_disabled_services }}"
   failed_when: false   # Service may not exist on all hosts

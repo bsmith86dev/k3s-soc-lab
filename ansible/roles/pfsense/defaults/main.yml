@@ -12,15 +12,47 @@ pfsense_password: "{{ vault_pfsense_password }}"   # Set in vault.yml
 # Get MACs from each device:
 #   Linux: ip link show | grep ether
 #   Proxmox: visible in web UI under node summary
-skynet_mac: "{{ vault_skynet_mac }}"
-amdpve_mac: "{{ vault_amdpve_mac }}"
-n1mini_mac: "{{ vault_n1mini_mac }}"
-zimaboard_mac: "{{ vault_zimaboard_mac }}"
-pi4_mac: "{{ vault_pi4_mac }}"
-pi5_mac: "{{ vault_pi5_mac }}"
+pfsense_skynet_mac: "{{ vault_skynet_mac }}"
+pfsense_amdpve_mac: "{{ vault_amdpve_mac }}"
+pfsense_n1mini_mac: "{{ vault_n1mini_mac }}"
+pfsense_zimaboard_mac: "{{ vault_zimaboard_mac }}"
+pfsense_pi4_mac: "{{ vault_pi4_mac }}"
+pfsense_pi5_mac: "{{ vault_pi5_mac }}"
 
 # pfSense WAN interface name
-pfsense_wan_interface: "igb0"
+pfsense_wan_interface: "igc0"
 
 # pfSense LAN/trunk interface (connected to MokerLink port 1)
-pfsense_lan_interface: "igb1"
+pfsense_lan_interface: "igc1"
+
+# DNS host overrides registered in Unbound
+# Add entries here — dns.yml will GET existing overrides and only POST missing ones.
+pfsense_dns_overrides:
+  - host: pfsense
+    domain: lab.blerdmh.local
+    ip: "10.0.10.1"
+    descr: "pfSense firewall / gateway"
+  - host: amdpve
+    domain: lab.blerdmh.local
+    ip: "10.0.10.20"
+    descr: "AMDPVE primary Proxmox node"
+  - host: n1minipve
+    domain: lab.blerdmh.local
+    ip: "10.0.10.21"
+    descr: "N1 Mini secondary Proxmox node"
+  - host: truenas
+    domain: lab.blerdmh.local
+    ip: "10.0.20.5"
+    descr: "ZimaBoard TrueNAS Scale"
+  - host: k3s-cp
+    domain: lab.blerdmh.local
+    ip: "10.0.20.10"
+    descr: "Pi 4 k3s control plane"
+  - host: k3s-w1
+    domain: lab.blerdmh.local
+    ip: "10.0.20.11"
+    descr: "Pi 5 k3s worker node"
+  - host: gitea
+    domain: lab.blerdmh.local
+    ip: "10.0.10.50"
+    descr: "Self-hosted Gitea on N1 Mini LXC 302"

@@ -1,0 +1,17 @@
+---
+# ansible/roles/pfsense/handlers/main.yml
+
+- name: Restart pfSense web GUI
+  ansible.builtin.raw: /etc/rc.restart_webgui
+  changed_when: true
+
+- name: Wait for pfSense web GUI
+  ansible.builtin.uri:
+    url: "https://{{ pfsense_host }}"
+    validate_certs: false
+    status_code: [200, 301, 302]
+  register: pfsense_gui_wait
+  retries: 12
+  delay: 5
+  until: pfsense_gui_wait.status is defined and pfsense_gui_wait.status in [200, 301, 302]
+  delegate_to: localhost

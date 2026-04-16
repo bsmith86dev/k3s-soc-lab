@@ -1,0 +1,123 @@
+---
+# ansible/roles/pfsense/tasks/interfaces.yml
+# Assigns each VLAN sub-interface (igc1.XX) to a friendly pfSense
+# interface name and gives it a routable static IP.
+#
+# Why this file exists:
+#   pfsensible.core.pfsense_vlan only creates the VLAN sub-interface on
+#   the parent NIC. It does NOT assign that sub-interface to a friendly
+#   interface or enable L3 routing. Without the assignment, traffic for
+#   that VLAN arrives at pfSense and is dropped on the floor — no
+#   gateway IP exists, so ARP fails on the client and "Destination Host
+#   Unreachable" is returned from the client's own IP.
+#
+# This MUST run after vlans.yml and before rules.yml — the rules
+# reference the friendly interface names (descr) created here.
+#
+# pfsense_interface param semantics (verified against pfsensible.core 0.7.1):
+#   descr     = friendly interface name (LAN / SECURITY / SERVERS / etc.)
+#   interface = physical port or VLAN sub-interface (igc1 / igc1.40 / ...)
+#
+# igc1.10 exists from initial pfSense setup with descr "LANManagement".
+# Rename it to MGMT so that dhcp.yml and rules.yml can reference it
+# by that name. IP stays 10.0.10.1/24 — no connectivity disruption.
+
+- name: "INTERFACE | Rename igc1.10 to MGMT (was LANManagement)"
+  pfsensible.core.pfsense_interface:
+    descr: MGMT
+    interface: "{{ pfsense_lan_interface }}.10"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.10.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign SERVERS VLAN 20
+  pfsensible.core.pfsense_interface:
+    descr: SERVERS
+    interface: "{{ pfsense_lan_interface }}.20"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.20.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign CEPH_PUB VLAN 30
+  pfsensible.core.pfsense_interface:
+    descr: CEPH_PUB
+    interface: "{{ pfsense_lan_interface }}.30"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.30.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign CEPH_CLUSTER VLAN 31
+  pfsensible.core.pfsense_interface:
+    descr: CEPH_CLUSTER
+    interface: "{{ pfsense_lan_interface }}.31"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.31.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign SECURITY VLAN 40
+  pfsensible.core.pfsense_interface:
+    descr: SECURITY
+    interface: "{{ pfsense_lan_interface }}.40"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.40.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign IOT_HONEYPOT VLAN 50
+  pfsensible.core.pfsense_interface:
+    descr: IOT_HONEYPOT
+    interface: "{{ pfsense_lan_interface }}.50"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.50.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign PRODUCTION VLAN 60
+  pfsensible.core.pfsense_interface:
+    descr: PRODUCTION
+    interface: "{{ pfsense_lan_interface }}.60"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.60.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign RED_TEAM VLAN 61
+  pfsensible.core.pfsense_interface:
+    descr: RED_TEAM
+    interface: "{{ pfsense_lan_interface }}.61"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.61.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign PURPLE_LAB VLAN 62
+  pfsensible.core.pfsense_interface:
+    descr: PURPLE_LAB
+    interface: "{{ pfsense_lan_interface }}.62"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.62.1
+    ipv4_prefixlen: 24
+    state: present
+
+- name: Assign GUEST_DMZ VLAN 70
+  pfsensible.core.pfsense_interface:
+    descr: GUEST_DMZ
+    interface: "{{ pfsense_lan_interface }}.70"
+    enable: true
+    ipv4_type: static
+    ipv4_address: 10.0.70.1
+    ipv4_prefixlen: 24
+    state: present

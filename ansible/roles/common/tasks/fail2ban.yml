@@ -19,5 +19,5 @@
 - name: Enable and start fail2ban
   ansible.builtin.systemd:
     name: fail2ban
-    enabled: yes
+    enabled: true
     state: started

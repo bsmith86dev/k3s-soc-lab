@@ -1,0 +1,18 @@
+---
+# ansible/roles/pfsense/tasks/ntp.yml
+# General setup — hostname, domain, timezone, upstream NTP, system DNS.
+#
+# pfSense serves NTP on every assigned interface IP by default, so
+# clients on every VLAN can sync against their own gateway (10.0.X.1)
+# without any cross-VLAN firewall rules.
+#
+# Keys verified against pfsensible.core.pfsense_setup 0.7.1:
+#   hostname, domain, timezone, timeservers, dns_addresses
+
+- name: "SETUP | General system config — hostname / domain / timezone / upstream NTP"
+  pfsensible.core.pfsense_setup:
+    hostname: "pfsense"
+    domain: "lab.blerdmh.local"
+    timezone: "America/Chicago"
+    timeservers: "0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org"
+    dns_addresses: "1.1.1.1 9.9.9.9"

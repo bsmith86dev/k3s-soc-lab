@@ -19,7 +19,7 @@ rules:
     level: warning
 
   truthy:
-    allowed-values: ['true', 'false', 'yes', 'no', 'on', 'off']
+    allowed-values: ['true', 'false', 'true', 'no', 'on', 'off']
     check-keys: false
 
 ignore: |

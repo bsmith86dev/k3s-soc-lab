@@ -5,7 +5,7 @@
 - name: Upgrade all packages
   ansible.builtin.apt:
     upgrade: dist
-    update_cache: yes
+    update_cache: true
   when: proxmox_upgrade_packages | bool
 
 - name: Install required packages
@@ -39,7 +39,7 @@
       - libpve-storage-perl
       - pve-headers
     state: present
-    update_cache: no   # Already done in repos.yml
+    update_cache: false   # Already done in repos.yml
 
 - name: Install Ceph packages
   ansible.builtin.apt:

@@ -14,18 +14,18 @@ Automation: `pfsensible.core` Ansible collection
 
 | pfSense Interface | Physical Port | Role |
 |-------------------|--------------|------|
-| igb0 | Port 1 | WAN (ISP uplink) |
-| igb1 | Port 2 | LAN trunk → MokerLink Port 1 |
-| igb1.10 | VLAN tag | MGMT — 10.0.10.0/24 — GW 10.0.10.1 |
-| igb1.20 | VLAN tag | SERVERS — 10.0.20.0/24 — GW 10.0.20.1 |
-| igb1.30 | VLAN tag | CEPH_PUB — 10.0.30.0/24 — GW 10.0.30.1 |
-| igb1.31 | VLAN tag | CEPH_CLUSTER — 10.0.31.0/24 — GW 10.0.31.1 |
-| igb1.40 | VLAN tag | SECURITY — 10.0.40.0/24 — GW 10.0.40.1 |
-| igb1.50 | VLAN tag | IOT_HONEYPOT — 10.0.50.0/24 — GW 10.0.50.1 |
-| igb1.60 | VLAN tag | PRODUCTION — 10.0.60.0/24 — GW 10.0.60.1 |
-| igb1.61 | VLAN tag | RED_TEAM — 10.0.61.0/24 — GW 10.0.61.1 |
-| igb1.62 | VLAN tag | PURPLE_LAB — 10.0.62.0/24 — GW 10.0.62.1 |
-| igb1.70 | VLAN tag | GUEST_DMZ — 10.0.70.0/24 — GW 10.0.70.1 |
+| igc0 | Port 1 | WAN (ISP uplink) |
+| igc1 | Port 2 | LAN trunk → MokerLink Port 1 |
+| igc1.10 | VLAN tag | MGMT — 10.0.10.0/24 — GW 10.0.10.1 |
+| igc1.20 | VLAN tag | SERVERS — 10.0.20.0/24 — GW 10.0.20.1 |
+| igc1.30 | VLAN tag | CEPH_PUB — 10.0.30.0/24 — GW 10.0.30.1 |
+| igc1.31 | VLAN tag | CEPH_CLUSTER — 10.0.31.0/24 — GW 10.0.31.1 |
+| igc1.40 | VLAN tag | SECURITY — 10.0.40.0/24 — GW 10.0.40.1 |
+| igc1.50 | VLAN tag | IOT_HONEYPOT — 10.0.50.0/24 — GW 10.0.50.1 |
+| igc1.60 | VLAN tag | PRODUCTION — 10.0.60.0/24 — GW 10.0.60.1 |
+| igc1.61 | VLAN tag | RED_TEAM — 10.0.61.0/24 — GW 10.0.61.1 |
+| igc1.62 | VLAN tag | PURPLE_LAB — 10.0.62.0/24 — GW 10.0.62.1 |
+| igc1.70 | VLAN tag | GUEST_DMZ — 10.0.70.0/24 — GW 10.0.70.1 |
 
 ---
 

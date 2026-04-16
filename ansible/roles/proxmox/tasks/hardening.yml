@@ -9,7 +9,7 @@
     block: |
       PermitRootLogin prohibit-password
       PasswordAuthentication no
-      PubkeyAuthentication yes
+      PubkeyAuthentication true
       AuthorizedKeysFile .ssh/authorized_keys
       X11Forwarding no
       MaxAuthTries 3
@@ -23,7 +23,8 @@
 - name: Configure kernel security parameters
   ansible.builtin.blockinfile:
     path: /etc/sysctl.d/99-proxmox-hardening.conf
-    create: yes
+    create: true
+    mode: '0644'
     block: |
       # Network hardening
       net.ipv4.ip_forward = 1
@@ -81,7 +82,8 @@
 - name: Configure audit rules
   ansible.builtin.blockinfile:
     path: /etc/audit/rules.d/proxmox-lab.rules
-    create: yes
+    create: true
+    mode: '0640'
     block: |
       # Audit privileged command execution
       -a always,exit -F arch=b64 -S execve -F euid=0 -k root-commands
@@ -96,7 +98,7 @@
 - name: Enable and start auditd
   ansible.builtin.systemd:
     name: auditd
-    enabled: yes
+    enabled: true
     state: started
 
 - name: Configure fail2ban for SSH on Proxmox node
@@ -136,5 +138,5 @@
 - name: Enable and start fail2ban
   ansible.builtin.systemd:
     name: fail2ban
-    enabled: yes
+    enabled: true
     state: started

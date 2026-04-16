@@ -43,7 +43,9 @@
 # On steady-state runs (names already correct), this task is a no-op.
 - name: Remove stale or incorrectly-named VM clones
   ansible.builtin.shell:
+    executable: /bin/bash
     cmd: |
+      set -o pipefail
       if ! qm config {{ item.vmid }} >/dev/null 2>&1; then
         echo "absent"
         exit 0
@@ -81,8 +83,9 @@
     vmid: "{{ proxmox_vm_template_id }}"          # source template VMID
     newid: "{{ item.vmid }}"                       # new VM VMID
     clone: "{{ proxmox_vm_template_name }}"        # source template NAME (required)
-    name: "{{ item.name }}"                        # new VM NAME (without this, Proxmox names it "Copy-of-VM-<template>")
-    full: yes
+    # new VM NAME — without this, Proxmox auto-names clones "Copy-of-VM-<template>"
+    name: "{{ item.name }}"
+    full: true
     storage: "{{ item.storage | default(proxmox_default_storage) }}"
     timeout: 600
     state: present
@@ -114,7 +117,9 @@
       net0: "virtio,bridge=vmbr0,tag={{ item.vlan }}"
     ipconfig:
       ipconfig0: "ip={{ item.ip }}/24,gw={{ item.gateway }}"
-    nameservers: "{{ item.dns | default('10.0.10.1') }}"
+    # DNS defaults to the per-VLAN gateway (pfSense) so that each VM
+    # resolves against its local interface — no cross-VLAN rules needed.
+    nameservers: "{{ item.dns | default(item.gateway) }}"
     searchdomains: "lab.blerdmh.local"
     sshkeys: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
     ciuser: "{{ item.ciuser | default('techinb') }}"

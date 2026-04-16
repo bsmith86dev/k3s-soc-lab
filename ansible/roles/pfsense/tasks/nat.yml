@@ -1,0 +1,89 @@
+---
+# ansible/roles/pfsense/tasks/nat.yml
+# Outbound NAT for all internal VLANs → WAN
+#
+# pfSense default: "Automatic outbound NAT" — auto-generates a masquerade
+# rule for every LAN-type interface. It's simpler and more forgiving to
+# let pfSense manage these automatically. These explicit rules are here
+# as a safety net for the "Hybrid" / "Manual" modes and to make the
+# ruleset diff-reviewable.
+#
+# Per pfsense_nat_outbound docs: leave `address` empty to masquerade
+# behind the WAN interface's primary IP.
+#
+# Run after interfaces.yml so the friendly interfaces exist.
+
+- name: "NAT | Outbound — MGMT VLAN 10"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_MGMT"
+    interface: wan
+    source: "10.0.10.0/24"
+    destination: any
+    address: ""
+    state: present
+
+- name: "NAT | Outbound — SERVERS VLAN 20"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_SERVERS"
+    interface: wan
+    source: "10.0.20.0/24"
+    destination: any
+    address: ""
+    state: present
+
+- name: "NAT | Outbound — SECURITY VLAN 40"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_SECURITY"
+    interface: wan
+    source: "10.0.40.0/24"
+    destination: any
+    address: ""
+    state: present
+
+- name: "NAT | Outbound — IOT_HONEYPOT VLAN 50"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_IOT"
+    interface: wan
+    source: "10.0.50.0/24"
+    destination: any
+    address: ""
+    state: present
+
+- name: "NAT | Outbound — PRODUCTION VLAN 60"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_PRODUCTION"
+    interface: wan
+    source: "10.0.60.0/24"
+    destination: any
+    address: ""
+    state: present
+
+- name: "NAT | Outbound — RED_TEAM VLAN 61"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_REDTEAM"
+    interface: wan
+    source: "10.0.61.0/24"
+    destination: any
+    address: ""
+    state: present
+
+- name: "NAT | Outbound — PURPLE_LAB VLAN 62"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_PURPLE"
+    interface: wan
+    source: "10.0.62.0/24"
+    destination: any
+    address: ""
+    state: present
+
+- name: "NAT | Outbound — GUEST_DMZ VLAN 70"
+  pfsensible.core.pfsense_nat_outbound:
+    descr: "NAT_GUEST"
+    interface: wan
+    source: "10.0.70.0/24"
+    destination: any
+    address: ""
+    state: present
+
+# CEPH_PUB (30) and CEPH_CLUSTER (31) intentionally get no outbound NAT —
+# storage traffic should never leave the lab.

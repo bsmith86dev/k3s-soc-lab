@@ -17,7 +17,7 @@
     block: |
       <!-- Active Response Configuration -->
       <active-response>
-        <disabled>{{ 'no' if wazuh_active_response_enabled else 'yes' }}</disabled>
+        <disabled>{{ 'no' if wazuh_active_response_enabled else 'true' }}</disabled>
 
         <!-- SSH brute force auto-block -->
         <command>firewall-drop</command>
@@ -27,7 +27,7 @@
       </active-response>
 
       <active-response>
-        <disabled>{{ 'no' if wazuh_active_response_enabled else 'yes' }}</disabled>
+        <disabled>{{ 'no' if wazuh_active_response_enabled else 'true' }}</disabled>
 
         <!-- Port scan auto-block -->
         <command>firewall-drop</command>

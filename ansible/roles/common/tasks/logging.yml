@@ -11,11 +11,12 @@
 - name: Configure rsyslog to forward to Wazuh
   ansible.builtin.blockinfile:
     path: /etc/rsyslog.d/60-wazuh-forward.conf
-    create: yes
+    create: true
+    mode: '0644'
     block: |
       # Forward all logs to Wazuh manager
       # Wazuh ingests these via its syslog input on port 514
-      *.* @{{ wazuh_manager_ip }}:514
+      *.* @{{ common_wazuh_manager_ip }}:514
     marker: "# {mark} ANSIBLE MANAGED — WAZUH FORWARDING"
   notify: restart rsyslog
 
@@ -55,5 +56,5 @@
 - name: Enable and start rsyslog
   ansible.builtin.systemd:
     name: rsyslog
-    enabled: yes
+    enabled: true
     state: started

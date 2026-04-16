@@ -24,7 +24,9 @@
 
 - name: Warn if NFS ISO storage not available
   ansible.builtin.debug:
-    msg: "WARNING: nfs-truenas-iso storage not available. Skipping LXC template download. Ensure TrueNAS is online and NFS storage is registered."
+    msg: >-
+      WARNING: nfs-truenas-iso storage not available. Skipping LXC template
+      download. Ensure TrueNAS is online and NFS storage is registered.
   when: nfs_iso_check.rc != 0
   run_once: true
 
@@ -37,7 +39,13 @@
 
 - name: Find latest Ubuntu 24.04 LXC template name
   ansible.builtin.shell:
-    cmd: pveam available --section system | awk '/ubuntu-24.04-standard/ {print $2}' | sort -V | tail -1
+    cmd: >-
+      set -o pipefail;
+      pveam available --section system
+      | awk '/ubuntu-24.04-standard/ {print $2}'
+      | sort -V
+      | tail -1
+    executable: /bin/bash
   register: lxc_template_name_raw
   changed_when: false
   when: nfs_iso_check.rc == 0
@@ -83,6 +91,8 @@
     password: "{{ vault_lxc_root_password }}"
     pubkey: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
     netif: "{{ item.netif }}"
+    nameserver: "{{ item.nameservers | default('10.0.10.1') }}"
+    searchdomain: "{{ item.searchdomain | default('lab.blerdmh.local') }}"
     features: "{{ item.features | default({}) }}"
     onboot: "{{ item.onboot | default(true) }}"
     unprivileged: "{{ item.unprivileged | default(true) }}"
@@ -107,13 +117,26 @@
   become: false
   when: nfs_iso_check.rc == 0
 
+- name: Extract IP from netif for readiness check
+  ansible.builtin.set_fact:
+    _lxc_readiness_targets: >-
+      {{
+        proxmox_lxc_containers
+        | map('combine', {'_wait_ip':
+            (item.netif.net0 | regex_search('ip=([0-9.]+)', '\\1') | first)
+          })
+        | list
+      }}
+  when: nfs_iso_check.rc == 0
+
 - name: Wait for LXC containers to be reachable
   ansible.builtin.wait_for:
-    host: "{{ item.ip }}"
+    host: "{{ item.netif.net0 | regex_search('ip=([0-9.]+)', '\\1') | first }}"
     port: 22
     delay: 5
     timeout: 60
   loop: "{{ proxmox_lxc_containers }}"
   delegate_to: localhost
   become: false
+  failed_when: result.rc != 0 and "expected error text" not in result.stderr
   when: nfs_iso_check.rc == 0

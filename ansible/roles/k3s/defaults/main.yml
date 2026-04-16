@@ -4,9 +4,9 @@
 # ── Versions ──────────────────────────────────────────────────────────────
 # Pin versions — update intentionally, never let them float
 k3s_version: "v1.31.4+k3s1"
-metallb_version: "0.14.5"
-cert_manager_version: "1.14.4"
-sealed_secrets_version: "0.26.3"
+k3s_metallb_version: "0.14.5"
+k3s_cert_manager_version: "1.14.4"
+k3s_sealed_secrets_version: "0.26.3"
 
 # ── Cluster networking ────────────────────────────────────────────────────
 k3s_server_ip: "10.0.20.10"          # Pi 4 control plane
@@ -15,7 +15,7 @@ k3s_service_cidr: "10.43.0.0/16"     # Service CIDR
 k3s_cluster_dns: "10.43.0.10"        # CoreDNS ClusterIP
 
 # MetalLB IP pool — carved from SERVERS VLAN, above DHCP range
-metallb_ip_range: "10.0.20.200-10.0.20.250"
+k3s_metallb_ip_range: "10.0.20.200-10.0.20.250"
 
 # Extra SANs for the k3s API server TLS cert
 k3s_api_extra_sans: ""

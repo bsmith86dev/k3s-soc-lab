@@ -64,7 +64,7 @@ iface vmbr0 inet static
     bridge-ports eno1
     bridge-stp off
     bridge-fd 0
-    bridge-vlan-aware yes
+    bridge-vlan-aware true
     bridge-vids 2-4094
 
 # 10G NIC for Ceph/storage fabric (NICGIGA)

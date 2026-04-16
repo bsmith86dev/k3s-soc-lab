@@ -51,5 +51,5 @@
 - name: Enable unattended-upgrades service
   ansible.builtin.systemd:
     name: unattended-upgrades
-    enabled: yes
+    enabled: true
     state: started

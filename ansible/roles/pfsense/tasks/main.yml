@@ -7,23 +7,89 @@
 #
 # Target: pfSense CE (latest) on Glovary i3-N355 6-port firewall
 # Management IP: 10.0.10.1 (VLAN 10 - MGMT)
+#
+# ── Tag taxonomy ────────────────────────────────────────────────────────────
+#
+#   Atomic tags (one task file each):
+#     setup        ntp / hostname / domain / timezone
+#     aliases      firewall aliases (host, network, port groups)
+#     vlans        VLAN sub-interface creation on igc1
+#     interfaces   L3 assignment of each VLAN + gateway IP
+#     nat          outbound masquerade rules
+#     rules        firewall pass/block policy
+#     dns          Unbound resolver + host overrides
+#     dhcp         per-VLAN pools + static reservations
+#
+#   Composite meta-tags (span multiple task files):
+#     pfsense      everything in this role
+#     bootstrap    one-time install of Python + pfSense-pkg-API
+#     network      vlans + interfaces + nat  (L2/L3 plumbing)
+#     policy       aliases + rules           (access control)
+#     services     setup + dns + dhcp        (client-facing services)
+#
+# ── Usage examples ──────────────────────────────────────────────────────────
+#
+#   Full run:
+#     ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml
+#
+#   Dry-run diff (safe for any tag):
+#     ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml \
+#       --check --diff --tags <tag>
+#
+#   Re-run only DNS after adding a host override:
+#     ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml \
+#       --tags dns
+#
+#   Re-run only firewall policy after a rule change:
+#     ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml \
+#       --tags policy
+#
+#   Re-run all L2/L3 plumbing (new VLAN day):
+#     ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml \
+#       --tags network
+#
+#   Skip DHCP (static-only environment):
+#     ansible-playbook -i inventory/hosts.yml playbooks/06-pfsense.yml \
+#       --skip-tags dhcp
+#
+# ── Task order is load-bearing — do not reorder ─────────────────────────────
+#   aliases must exist before rules reference them
+#   vlans must exist before interfaces can assign them
+#   interfaces must exist before rules reference friendly names
+#   nat runs after interfaces so WAN interface is confirmed
+
+- name: Include bootstrap tasks (Python 3.11 + pfSense-pkg-API)
+  ansible.builtin.import_tasks: bootstrap.yml
+  tags: [pfsense, bootstrap]
+
+- name: Include NTP / system setup tasks
+  ansible.builtin.import_tasks: ntp.yml
+  tags: [pfsense, setup, services]
 
 - name: Include aliases tasks
   ansible.builtin.import_tasks: aliases.yml
-  tags: [pfsense, aliases]
+  tags: [pfsense, aliases, policy]
 
-- name: Include VLAN interface tasks
+- name: Include VLAN creation tasks
   ansible.builtin.import_tasks: vlans.yml
-  tags: [pfsense, vlans]
+  tags: [pfsense, vlans, network]
+
+- name: Include interface assignment tasks
+  ansible.builtin.import_tasks: interfaces.yml
+  tags: [pfsense, interfaces, network]
+
+- name: Include NAT tasks
+  ansible.builtin.import_tasks: nat.yml
+  tags: [pfsense, nat, network]
 
 - name: Include firewall rules tasks
   ansible.builtin.import_tasks: rules.yml
-  tags: [pfsense, rules]
+  tags: [pfsense, rules, policy]
 
 - name: Include DNS resolver tasks
   ansible.builtin.import_tasks: dns.yml
-  tags: [pfsense, dns]
+  tags: [pfsense, dns, services]
 
 - name: Include DHCP tasks
   ansible.builtin.import_tasks: dhcp.yml
-  tags: [pfsense, dhcp]
+  tags: [pfsense, dhcp, services]

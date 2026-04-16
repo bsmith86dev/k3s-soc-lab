@@ -1,0 +1,61 @@
+---
+# ansible/roles/pfsense/tasks/bootstrap.yml
+# One-time bootstrap for a fresh pfSense box:
+#   1. Install Python 3.11 (required by pfsensible.core modules)
+#   2. Install pfSense-pkg-RESTAPI (required by dns.yml REST tasks)
+#
+# All tasks use `raw` or delegate to localhost so they run before
+# Python is available on pfSense. Idempotent via explicit presence checks.
+#
+# pfSense 2.8.1 / FreeBSD 14 — Python pkg: python311
+# REST API package: https://github.com/pfrest/pfSense-pkg-RESTAPI
+# NOTE: pkg-static add is required (not pkg add -f) for pfSense packages.
+
+- name: "BOOTSTRAP | Check for Python 3.11 on pfSense"
+  ansible.builtin.raw: test -x /usr/local/bin/python3.11 && echo present || echo missing
+  register: pfsense_python_check
+  changed_when: false
+  failed_when: false
+
+- name: "BOOTSTRAP | Install Python 3.11"
+  ansible.builtin.raw: pkg install -y python311
+  when: "'missing' in pfsense_python_check.stdout"
+  changed_when: true
+
+- name: "BOOTSTRAP | Check for pfSense-pkg-RESTAPI"
+  ansible.builtin.raw: pkg info pfSense-pkg-RESTAPI > /dev/null 2>&1 && echo present || echo missing
+  register: pfsense_api_check
+  changed_when: false
+  failed_when: false
+
+# Download on control node (WSL) to avoid pfSense-to-GitHub timeouts,
+# then push over the existing SSH session.
+- name: "BOOTSTRAP | Download pfSense-pkg-RESTAPI on control node"
+  ansible.builtin.get_url:
+    url: "https://github.com/pfrest/pfSense-pkg-RESTAPI/releases/latest/download/pfSense-2.8.1-pkg-RESTAPI.pkg"
+    dest: "/tmp/pfSense-pkg-RESTAPI.pkg"
+    mode: "0644"
+  delegate_to: localhost
+  when: "'missing' in pfsense_api_check.stdout"
+
+- name: "BOOTSTRAP | Copy pfSense-pkg-RESTAPI to pfSense"
+  ansible.builtin.copy:
+    src: "/tmp/pfSense-pkg-RESTAPI.pkg"
+    dest: "/tmp/pfSense-pkg-RESTAPI.pkg"
+    mode: "0644"
+  when: "'missing' in pfsense_api_check.stdout"
+
+- name: "BOOTSTRAP | Install pfSense-pkg-RESTAPI (pkg-static add)"
+  ansible.builtin.raw: pkg-static add /tmp/pfSense-pkg-RESTAPI.pkg && rm -f /tmp/pfSense-pkg-RESTAPI.pkg
+  when: "'missing' in pfsense_api_check.stdout"
+  changed_when: true
+  notify:
+    - Restart pfSense web GUI
+    - Wait for pfSense web GUI
+
+- name: "BOOTSTRAP | Clean up package from control node"
+  ansible.builtin.file:
+    path: "/tmp/pfSense-pkg-RESTAPI.pkg"
+    state: absent
+  delegate_to: localhost
+  when: "'missing' in pfsense_api_check.stdout"

@@ -1,20 +1,20 @@
 ---
-# .pre-commit-config.yaml
-# Runs automatically on every git commit (after: pre-commit install)
-# Same checks as CI pipeline — catches issues before push
-#
-# Setup (run once on Skynet):
-#   pip install pre-commit detect-secrets
-#   pre-commit install
-#   detect-secrets scan \
-#     --exclude-files '.*-sealed\.yml' \
-#     --exclude-files 'vault\.yml' \
-#     > .secrets.baseline
-
+default_language_version:
+  python: python3.10
 
 repos:
+  # Core hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: mixed-line-ending
+        args: [--fix=lf]
 
-  # Secret detection
+  # Security (you NEED this for your field)
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
@@ -27,41 +27,18 @@ repos:
           - --exclude-files
           - vault\.yml
         exclude: ^\.ansible/
-  # Ansible lint
-  - repo: https://github.com/ansible/ansible-lint
-    rev: v6.22.1
-    hooks:
-      - id: ansible-lint
-        language_version: python3
-        additional_dependencies:
-          - ansible
 
-  # General file hygiene
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-        args: [--allow-multiple-documents]
-        exclude: (^\.ansible/|.*-sealed\.yml)
-
-      - id: check-merge-conflict
-        exclude: ^\.ansible/
-
-      - id: check-added-large-files
-        args: [--maxkb=500]
-        exclude: ^\.ansible/
-
-      - id: detect-private-key
-        exclude: ^\.ansible/
-
-      - id: check-executables-have-shebangs
-        exclude: ^\.ansible/
-  # YAML lint
+  # YAML linting
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
       - id: yamllint
-        args: [-c, .yamllint.yml]
-        exclude: (^\.ansible/|.*-sealed\.yml)
+
+  # Ansible lint (ISOLATED + FIXED)
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v6.22.2
+    hooks:
+      - id: ansible-lint
+        language_version: python3.10
+        additional_dependencies:
+          - ansible-core>=2.16

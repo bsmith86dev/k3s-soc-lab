@@ -16,8 +16,8 @@
 ISP
  │
  └── pfSense (Glovary i3-N355)
-      igb0 — WAN
-      igb1 — Trunk → MokerLink POE-G0800GM
+      igc0 — WAN
+      igc1 — Trunk → MokerLink POE-G0800GM
                │
                ├── Port 1  pfSense trunk uplink
                ├── Port 2  AMDPVE        (VLAN trunk: 10,20,30,31,40,60)

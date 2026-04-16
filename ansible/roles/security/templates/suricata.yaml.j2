@@ -28,12 +28,12 @@ vars:
 
 # ── AF_PACKET capture ─────────────────────────────────────────────────────
 af-packet:
-  - interface: {{ suricata_capture_interface }}
+  - interface: {{ security_suricata_capture_interface }}
     cluster-id: 99
     cluster-type: cluster_flow
-    defrag: yes
-    use-mmap: yes
-    tpacket-v3: yes
+    defrag: true
+    use-mmap: true
+    tpacket-v3: true
     ring-size: 2048
     block-size: 32768
     block-timeout: 10
@@ -44,30 +44,30 @@ af-packet:
 outputs:
   # EVE JSON — primary output, ingested by Wazuh + Grafana
   - eve-log:
-      enabled: yes
+      enabled: true
       filetype: regular
       filename: /var/log/suricata/eve.json
-      community-id: yes
+      community-id: true
       community-id-seed: 0
       types:
         - alert:
-            payload: yes
+            payload: true
             payload-buffer-size: 4kb
-            payload-printable: yes
-            packet: yes
-            http-body: yes
-            http-body-printable: yes
-            metadata: yes
-            tagged-packets: yes
+            payload-printable: true
+            packet: true
+            http-body: true
+            http-body-printable: true
+            metadata: true
+            tagged-packets: true
         - anomaly:
-            enabled: yes
+            enabled: true
         - http:
-            extended: yes
+            extended: true
         - dns:
-            query: yes
-            answer: yes
+            query: true
+            answer: true
         - tls:
-            extended: yes
+            extended: true
         - files:
             force-magic: no
         - smtp: {}
@@ -78,16 +78,16 @@ outputs:
 
   # Fast log — quick human-readable alert summary
   - fast:
-      enabled: yes
+      enabled: true
       filename: /var/log/suricata/fast.log
-      append: yes
+      append: true
 
   # Stats
   - stats:
-      enabled: yes
+      enabled: true
       filename: /var/log/suricata/stats.log
-      append: yes
-      totals: yes
+      append: true
+      totals: true
       threads: no
       pkt-stats: no
 
@@ -124,11 +124,11 @@ threading:
 app-layer:
   protocols:
     tls:
-      enabled: yes
+      enabled: true
       detection-ports:
         dp: 443
     http:
-      enabled: yes
+      enabled: true
       libhtp:
         default-config:
           personality: IDS
@@ -136,16 +136,16 @@ app-layer:
           response-body-limit: 100kb
     dns:
       tcp:
-        enabled: yes
+        enabled: true
         detection-ports:
           dp: 53
       udp:
-        enabled: yes
+        enabled: true
         detection-ports:
           dp: 53
     ssh:
-      enabled: yes
+      enabled: true
     smtp:
-      enabled: yes
+      enabled: true
     ftp:
-      enabled: yes
+      enabled: true

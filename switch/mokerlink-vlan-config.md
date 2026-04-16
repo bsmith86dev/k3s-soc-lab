@@ -31,12 +31,15 @@ Location in UI: Advanced → 802.1Q VLAN → VLAN Config
 
 ## Port Configuration
 
-### Port 1 — pfSense igb1 (TRUNK uplink)
+### Port 1 — pfSense igc1 (TRUNK uplink)
 **Mode:** Tagged trunk
-**Native/PVID:** 10
+**Native/PVID:** 1 (default — leave at 1, do NOT change to 10)
 **Tagged VLANs:** 10, 20, 30, 31, 40, 50, 60, 61, 62, 70
 
-All VLANs must be tagged here. pfSense handles routing between them.
+All VLANs including MGMT (10) are tagged on this port. pfSense's igc1.10
+sub-interface handles tagged VLAN 10 and serves 10.0.10.1/24. igc1 itself
+has no IP and is a pure trunk parent. Changing Port 1 PVID to 10 will
+make VLAN 10 arrive untagged on igc1, bypassing igc1.10 and causing lockout.
 
 ### Port 2 — AMDPVE (Proxmox primary)
 **Mode:** Tagged trunk
