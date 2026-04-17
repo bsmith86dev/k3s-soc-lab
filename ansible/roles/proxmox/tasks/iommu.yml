@@ -18,7 +18,7 @@
 - name: Check current GRUB cmdline
   ansible.builtin.command:
     cmd: grep -c "amd_iommu=on" /etc/default/grub
-  register: iommu_grub_check
+  register: proxmox_iommu_grub_check
   changed_when: false
   failed_when: false
 
@@ -27,7 +27,7 @@
     path: /etc/default/grub
     regexp: '^(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*)"'
     replace: '\1 amd_iommu=on iommu=pt quiet"'
-  when: iommu_grub_check.stdout == "0"
+  when: proxmox_iommu_grub_check.stdout == "0"
   notify:
     - update grub
     - reboot host
@@ -72,10 +72,10 @@
   ansible.builtin.shell:
     cmd: set -o pipefail; dmesg | grep -i iommu | head -5
     executable: /bin/bash
-  register: iommu_dmesg
+  register: proxmox_iommu_dmesg
   changed_when: false
   failed_when: false
 
 - name: Display IOMMU status
   ansible.builtin.debug:
-    msg: "{{ iommu_dmesg.stdout_lines }}"
+    msg: "{{ proxmox_iommu_dmesg.stdout_lines }}"

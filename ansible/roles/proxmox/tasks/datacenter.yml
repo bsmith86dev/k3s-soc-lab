@@ -25,11 +25,11 @@
     cmd: >
       pveum user add {{ proxmox_api_user }}@pam
       --comment "Ansible automation user"
-  register: pveum_user
-  changed_when: pveum_user.rc == 0
+  register: proxmox_pveum_user
+  changed_when: proxmox_pveum_user.rc == 0
   failed_when:
-    - pveum_user.rc != 0
-    - "'already exists' not in pveum_user.stderr"
+    - proxmox_pveum_user.rc != 0
+    - "'already exists' not in proxmox_pveum_user.stderr"
   run_once: true
 
 - name: Grant Ansible API user Administrator role
@@ -47,11 +47,11 @@
       pveum user token add {{ proxmox_api_user }}@pam ansible
       --privsep 0
       --comment "Ansible automation token"
-  register: api_token
-  changed_when: api_token.rc == 0
+  register: proxmox_api_token
+  changed_when: proxmox_api_token.rc == 0
   failed_when:
-    - api_token.rc != 0
-    - "'already exists' not in api_token.stderr"
+    - proxmox_api_token.rc != 0
+    - "'already exists' not in proxmox_api_token.stderr"
   run_once: true
 
 - name: Display API token (save this — shown only once)  # noqa: no-handler
@@ -61,13 +61,13 @@
       Proxmox API token created. Save this to vault.yml now.
       It will NOT be shown again.
 
-      {{ api_token.stdout }}
+      {{ proxmox_api_token.stdout }}
 
       Add to vault.yml as:
         vault_proxmox_api_token_id: "{{ proxmox_api_user }}@pam!ansible"
         vault_proxmox_api_token_secret: "<value from above>"
       ============================================================
-  when: api_token.changed
+  when: proxmox_api_token.changed
   run_once: true
 
 - name: Configure HA groups for critical VMs (Proxmox <8.4)
@@ -76,8 +76,8 @@
       ha-manager groupadd security-stack
       --nodes amdpve:2,n1minipve:1
       --comment "Security stack VMs prefer AMDPVE"
-  register: ha_group
-  changed_when: ha_group.rc == 0
+  register: proxmox_ha_group
+  changed_when: proxmox_ha_group.rc == 0
   failed_when: false   # Non-fatal — HA groups deprecated in Proxmox 8.4+
   run_once: true
 
@@ -89,8 +89,8 @@
       After VMs are created, configure HA node preference manually in the
       Proxmox web UI: Datacenter → HA → Add Resource for each VM.
   when:
-    - ha_group is defined
-    - ha_group.rc != 0
+    - proxmox_ha_group is defined
+    - proxmox_ha_group.rc != 0
   run_once: true
 
 - name: Set cluster-wide CPU governor to performance

@@ -26,7 +26,7 @@
     path: /etc/network/interfaces
   tags:
     - network
-  register: net_interfaces
+  register: proxmox_net_interfaces
 
 - name: Back up current network interfaces file
   ansible.builtin.copy:
@@ -36,7 +36,7 @@
     mode: '0644'
   tags:
     - network
-  when: net_interfaces.stat.exists
+  when: proxmox_net_interfaces.stat.exists
 
 - name: Deploy network interfaces config
   ansible.builtin.template:

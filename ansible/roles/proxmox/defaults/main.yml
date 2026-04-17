@@ -54,6 +54,7 @@ proxmox_vfio_pci_ids: ""
 
 proxmox_vm_template_id: 9000        # Ubuntu 24.04 cloud-init template VMID
 proxmox_vm_template_name: "ubuntu-24.04-template"
+proxmox_vm_template_node: "amdpve"  # Node where the cloud-init template lives
 
 # Optional SSH readiness check for newly provisioned VMs.
 proxmox_wait_for_ssh: true

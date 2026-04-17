@@ -20,7 +20,7 @@
 - name: Check if PBS storage already registered
   ansible.builtin.command:
     cmd: pvesm list pbs-truenas
-  register: pbs_check
+  register: proxmox_pbs_check
   changed_when: false
   failed_when: false
   tags:
@@ -30,7 +30,7 @@
 - name: Check PBS host connectivity
   ansible.builtin.command:
     cmd: ping -c 1 {{ vault_pbs_host }}
-  register: pbs_ping
+  register: proxmox_pbs_ping
   changed_when: false
   failed_when: false
   tags:
@@ -48,14 +48,14 @@
       --content backup
       --nodes {{ proxmox_cluster_nodes | join(',') }}
       --prune-backups keep-last=3,keep-daily=7,keep-weekly=4,keep-monthly=3
-  register: pvesm_pbs
-  changed_when: pvesm_pbs.rc == 0
+  register: proxmox_pvesm_pbs
+  changed_when: proxmox_pvesm_pbs.rc == 0
   failed_when:
-    - pvesm_pbs.rc != 0
-    - "'already defined' not in (pvesm_pbs.stderr | default(''))"
+    - proxmox_pvesm_pbs.rc != 0
+    - "'already defined' not in (proxmox_pvesm_pbs.stderr | default(''))"
   when:
-    - pbs_check.rc != 0
-    - pbs_ping.rc == 0
+    - proxmox_pbs_check.rc != 0
+    - proxmox_pbs_ping.rc == 0
   no_log: true
   tags:
     - pbs
@@ -63,18 +63,18 @@
 - name: Verify PBS storage is reachable
   ansible.builtin.command:
     cmd: pvesm status --storage pbs-truenas
-  register: pbs_status
+  register: proxmox_pbs_status
   changed_when: false
   failed_when: false
-  when: pbs_ping.rc == 0
+  when: proxmox_pbs_ping.rc == 0
   tags:
     - pbs
 
 - name: Display PBS status
   ansible.builtin.debug:
-    msg: "{{ pbs_status.stdout_lines }}"
+    msg: "{{ proxmox_pbs_status.stdout_lines }}"
   when:
-    - pbs_status is defined
-    - not pbs_status.skipped | default(false)
+    - proxmox_pbs_status is defined
+    - not proxmox_pbs_status.skipped | default(false)
   tags:
     - pbs

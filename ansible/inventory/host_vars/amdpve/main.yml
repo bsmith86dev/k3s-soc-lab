@@ -18,7 +18,9 @@ proxmox_enable_iommu: true
 #   XX:00.0 VGA compatible controller [0300]: Advanced Micro Devices [1002:731f]
 #   XX:00.1 Audio device [0403]: Advanced Micro Devices [1002:ab38]
 # Then set: proxmox_vfio_pci_ids: "1002:731f,1002:ab38"
-proxmox_vfio_pci_ids: ""           # FILL IN after running lspci
+proxmox_vfio_pci_ids:
+  - "1002:731f"          # FILL IN after running lspci
+  - "1002:ab38"          # FILL IN after running lspci
 
 # AMDPVE hosts security VMs and the GPU k3s worker
 # LXC provisioning is handled by N1 Mini (set false here)

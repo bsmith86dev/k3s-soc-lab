@@ -54,7 +54,7 @@
 
 - name: "DNS | Build list of existing host.domain pairs"
   ansible.builtin.set_fact:
-    pfsense_pfsense_existing_dns_fqdns: >-
+    pfsense_existing_dns_fqdns: >-
       {{
         pfsense_existing_dns.json.data
         | map(attribute='host')
@@ -79,7 +79,7 @@
         - "{{ item.ip }}"
       descr: "{{ item.descr }}"
   loop: "{{ pfsense_dns_overrides }}"
-  when: (item.host ~ '.' ~ item.domain) not in pfsense_pfsense_existing_dns_fqdns
+  when: (item.host ~ '.' ~ item.domain) not in pfsense_existing_dns_fqdns
   register: pfsense_dns_result
   failed_when: >
     pfsense_dns_result.status not in [200, 201, 204] and

@@ -1,0 +1,7 @@
+# Python dependencies for the blerdmh lab Ansible control node
+# Install: pip install -r requirements.txt
+
+ansible>=10.0,<11.0
+ansible-lint>=26.0
+proxmoxer>=2.0
+requests>=2.28

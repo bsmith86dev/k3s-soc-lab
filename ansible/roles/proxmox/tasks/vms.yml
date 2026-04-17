@@ -21,7 +21,7 @@
 - name: Check if cloud-init VM template exists
   ansible.builtin.command:
     cmd: qm config {{ proxmox_vm_template_id }}
-  register: vm_template_check
+  register: proxmox_vm_template_check
   changed_when: false
   failed_when: false
   delegate_to: amdpve
@@ -32,7 +32,7 @@
     msg: >
       WARNING: Cloud-init template VMID {{ proxmox_vm_template_id }} not found.
       Skipping VM provisioning. Create the template on AMDPVE then rerun with --tags vms.
-  when: vm_template_check.rc != 0
+  when: proxmox_vm_template_check.rc != 0
   run_once: true
 
 # Recover from previous broken runs: destroy any VM at one of our target VMIDs
@@ -65,13 +65,13 @@
       fi
       qm destroy {{ item.vmid }} --purge 1 --destroy-unreferenced-disks 1 --skiplock 1
       echo "removed"
-  register: vm_cleanup
-  changed_when: "'removing' in vm_cleanup.stdout"
+  register: proxmox_vm_cleanup
+  changed_when: "'removing' in proxmox_vm_cleanup.stdout"
   loop: "{{ proxmox_vms }}"
   delegate_to: "{{ item.node }}"
   loop_control:
     label: "vmid {{ item.vmid }} ({{ item.name }})"
-  when: vm_template_check.rc == 0
+  when: proxmox_vm_template_check.rc == 0
 
 - name: Clone VMs from cloud-init template
   community.general.proxmox_kvm:
@@ -79,7 +79,7 @@
     api_user: "{{ proxmox_api_user }}@pam"
     api_token_id: "ansible"
     api_token_secret: "{{ vault_proxmox_api_token_secret }}"
-    node: "{{ item.node }}"
+    node: "{{ proxmox_vm_template_node }}"        # template lives here
     vmid: "{{ proxmox_vm_template_id }}"          # source template VMID
     newid: "{{ item.vmid }}"                       # new VM VMID
     clone: "{{ proxmox_vm_template_name }}"        # source template NAME (required)
@@ -92,13 +92,44 @@
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
   become: false
-  register: clone_result
+  vars:
+    ansible_python_interpreter: /home/workbench/CSLAB/SOC/blerdmh-lab/.venv/bin/python3
+  register: proxmox_clone_result
   failed_when:
-    - clone_result.failed | default(false)
-    - "'already exists' not in (clone_result.msg | default(''))"
+    - proxmox_clone_result.failed | default(false)
+    - "'already exists' not in (proxmox_clone_result.msg | default(''))"
   loop_control:
     label: "vmid {{ item.vmid }} ({{ item.name }})"
-  when: vm_template_check.rc == 0
+  when: proxmox_vm_template_check.rc == 0
+
+# After cloning, VMs live on the template node (amdpve). VMs whose target
+# node is different must be migrated before configuration. pmxcfs exposes
+# each VM config at /etc/pve/nodes/<node>/qemu-server/<vmid>.conf, so we
+# can cheaply check whether the VM is already on the right node.
+- name: Migrate cross-node VMs to their target node
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -o pipefail
+      if [ -f /etc/pve/nodes/{{ item.node }}/qemu-server/{{ item.vmid }}.conf ]; then
+        echo "already_on_target"
+        exit 0
+      fi
+      if [ ! -f /etc/pve/nodes/{{ proxmox_vm_template_node }}/qemu-server/{{ item.vmid }}.conf ]; then
+        echo "vm_not_found"
+        exit 1
+      fi
+      echo "migrating"
+      qm migrate {{ item.vmid }} {{ item.node }}
+  delegate_to: "{{ proxmox_vm_template_node }}"
+  loop: "{{ proxmox_vms }}"
+  register: proxmox_vm_migrate
+  changed_when: "'migrating' in (proxmox_vm_migrate.stdout | default(''))"
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.name }}) -> {{ item.node }}"
+  when:
+    - proxmox_vm_template_check.rc == 0
+    - item.node != proxmox_vm_template_node
 
 - name: Configure cloned VMs (CPU, RAM, network, cloud-init)
   community.general.proxmox_kvm:
@@ -133,9 +164,11 @@
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
   become: false
+  vars:
+    ansible_python_interpreter: /home/workbench/CSLAB/SOC/blerdmh-lab/.venv/bin/python3
   loop_control:
     label: "vmid {{ item.vmid }} ({{ item.name }})"
-  when: vm_template_check.rc == 0
+  when: proxmox_vm_template_check.rc == 0
 
 - name: Resize VM disks to specified size
   community.general.proxmox_disk:
@@ -150,9 +183,11 @@
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
   become: false
+  vars:
+    ansible_python_interpreter: /home/workbench/CSLAB/SOC/blerdmh-lab/.venv/bin/python3
   loop_control:
     label: "vmid {{ item.vmid }} ({{ item.name }}) -> {{ item.disk_size | default('40G') }}"
-  when: vm_template_check.rc == 0
+  when: proxmox_vm_template_check.rc == 0
 
 - name: Start virtual machines
   community.general.proxmox_kvm:
@@ -166,9 +201,11 @@
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
   become: false
+  vars:
+    ansible_python_interpreter: /home/workbench/CSLAB/SOC/blerdmh-lab/.venv/bin/python3
   loop_control:
     label: "vmid {{ item.vmid }} ({{ item.name }})"
-  when: vm_template_check.rc == 0
+  when: proxmox_vm_template_check.rc == 0
 
 # Health check via QEMU guest agent — runs ON the Proxmox node, NOT the controller.
 # The Ansible control host typically has no L3 route to VM VLANs (e.g. VLAN 40),
@@ -185,8 +222,11 @@
     state: started
   loop: "{{ proxmox_vms }}"
   delegate_to: localhost
-  ignore_errors: true
-  register: _vm_ssh_wait
+  vars:
+    ansible_python_interpreter: /home/workbench/CSLAB/SOC/blerdmh-lab/.venv/bin/python3
+  register: proxmox_vm_ssh_wait
+  failed_when: false
+  when: proxmox_vm_template_check.rc == 0
 
 - name: Report VMs that did not respond on SSH
   ansible.builtin.debug:
@@ -194,7 +234,9 @@
       WARNING: VM {{ item.item.name }} (vmid {{ item.item.vmid }}) did not respond
       on SSH within 180s. Check 'qm status {{ item.item.vmid }}' on
       {{ item.item.node }} and inspect the VM console for cloud-init errors.
-  loop: "{{ _vm_ssh_wait.results }}"
+  loop: "{{ proxmox_vm_ssh_wait.results | default([]) }}"
   loop_control:
     label: "vmid {{ item.item.vmid }}"
-  when: item.failed | default(false)
+  when:
+    - proxmox_vm_template_check.rc == 0
+    - item.failed | default(false)

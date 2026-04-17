@@ -1,41 +1,39 @@
 ---
 # ansible/roles/proxmox/tasks/lxc.yml
 # Provision LXC containers on Proxmox nodes
-# Uses community.general.proxmox module via Proxmox API
+# Uses pct CLI directly on the node (runs as root) because the Proxmox API
+# restricts LXC template operations to root@pam — API tokens under other
+# users hit "Only root can pass arbitrary filesystem paths".
 #
 # All containers defined in proxmox_lxc_containers list (defaults/main.yml)
 # Prerequisites:
-#   - Proxmox API token in vault.yml
 #   - Ubuntu 24.04 LXC template downloaded to TrueNAS ISO store
 #     Download: pveam download nfs-truenas-iso ubuntu-24.04-standard_24.04-2_amd64.tar.zst
 #   - Storage backends registered (storage-nfs.yml complete)
 
 - name: Set default LXC template name
   ansible.builtin.set_fact:
-    lxc_template_name: "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+    proxmox_lxc_template_name: "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
 
 - name: Check if NFS ISO storage is available
   ansible.builtin.command:
     cmd: pvesm status --storage nfs-truenas-iso
-  register: nfs_iso_check
+  register: proxmox_nfs_iso_check
   changed_when: false
   failed_when: false
-  run_once: true
 
 - name: Warn if NFS ISO storage not available
   ansible.builtin.debug:
     msg: >-
       WARNING: nfs-truenas-iso storage not available. Skipping LXC template
       download. Ensure TrueNAS is online and NFS storage is registered.
-  when: nfs_iso_check.rc != 0
-  run_once: true
+  when: proxmox_nfs_iso_check.rc != 0
 
 - name: Update available LXC template list from Proxmox repos
   ansible.builtin.command:
     cmd: pveam update
   changed_when: false
-  when: nfs_iso_check.rc == 0
-  run_once: true
+  when: proxmox_nfs_iso_check.rc == 0
 
 - name: Find latest Ubuntu 24.04 LXC template name
   ansible.builtin.shell:
@@ -46,88 +44,81 @@
       | sort -V
       | tail -1
     executable: /bin/bash
-  register: lxc_template_name_raw
+  register: proxmox_lxc_template_name_raw
   changed_when: false
-  when: nfs_iso_check.rc == 0
-  run_once: true
+  when: proxmox_nfs_iso_check.rc == 0
 
 - name: Update LXC template name from repo listing
   ansible.builtin.set_fact:
-    lxc_template_name: "{{ lxc_template_name_raw.stdout }}"
+    proxmox_lxc_template_name: "{{ proxmox_lxc_template_name_raw.stdout }}"
   when:
-    - nfs_iso_check.rc == 0
-    - lxc_template_name_raw.stdout | default('') | length > 0
-  run_once: true
+    - proxmox_nfs_iso_check.rc == 0
+    - proxmox_lxc_template_name_raw.stdout | default('') | length > 0
 
 - name: Download Ubuntu 24.04 LXC template if not present
   ansible.builtin.command:
-    cmd: pveam download nfs-truenas-iso {{ lxc_template_name }}
-  register: template_download
-  changed_when: template_download.rc == 0
+    cmd: pveam download nfs-truenas-iso {{ proxmox_lxc_template_name }}
+  register: proxmox_template_download
+  changed_when: proxmox_template_download.rc == 0
   failed_when:
-    - template_download.rc != 0
-    - "'already exists' not in template_download.stderr"
-    - "'already downloaded' not in template_download.stdout"
+    - proxmox_template_download.rc != 0
+    - "'already exists' not in proxmox_template_download.stderr"
+    - "'already downloaded' not in proxmox_template_download.stdout"
   when:
-    - nfs_iso_check.rc == 0
-    - lxc_template_name | length > 0
-  run_once: true
+    - proxmox_nfs_iso_check.rc == 0
+    - proxmox_lxc_template_name | length > 0
+
 
 - name: Provision LXC containers
-  community.general.proxmox:
-    api_host: "{{ proxmox_api_host }}"
-    api_user: "{{ proxmox_api_user }}@pam"
-    api_token_id: "ansible"
-    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
-    vmid: "{{ item.vmid }}"
-    hostname: "{{ item.hostname }}"
-    node: "{{ item.node }}"
-    ostemplate: "{{ item.ostemplate | default('nfs-truenas-iso:vztmpl/' + lxc_template_name) }}"
-    storage: "{{ item.storage | default(proxmox_default_storage) }}"
-    disk: "{{ item.disk | default('20') }}"
-    cores: "{{ item.cores | default(2) }}"
-    memory: "{{ item.memory | default(2048) }}"
-    swap: "{{ item.swap | default(512) }}"
-    password: "{{ vault_lxc_root_password }}"
-    pubkey: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
-    netif: "{{ item.netif }}"
-    nameserver: "{{ item.nameservers | default('10.0.10.1') }}"
-    searchdomain: "{{ item.searchdomain | default('lab.blerdmh.local') }}"
-    features: "{{ item.features | default({}) }}"
-    onboot: "{{ item.onboot | default(true) }}"
-    unprivileged: "{{ item.unprivileged | default(true) }}"
-    description: "{{ item.description | default('') }}"
-    state: present
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -eo pipefail
+      if pct config {{ item.vmid }} >/dev/null 2>&1; then
+        echo "exists"
+        exit 0
+      fi
+      tmpkey=$(mktemp)
+      trap 'rm -f "$tmpkey"' EXIT
+      echo '{{ lookup("file", "~/.ssh/id_ed25519.pub") }}' > "$tmpkey"
+      echo "creating"
+      pct create {{ item.vmid }} \
+        '{{ item.ostemplate | default("nfs-truenas-iso:vztmpl/" + proxmox_lxc_template_name) }}' \
+        --hostname '{{ item.hostname }}' \
+        --rootfs '{{ item.storage | default(proxmox_default_storage) }}:{{ item.disk | default("20") }}' \
+        --cores '{{ item.cores | default(2) }}' \
+        --memory '{{ item.memory | default(2048) }}' \
+        --swap '{{ item.swap | default(512) }}' \
+        --ssh-public-keys "$tmpkey" \
+        --net0 '{{ item.netif.net0 }}' \
+        --nameserver '{{ item.nameservers | default("10.0.10.1") }}' \
+        --searchdomain '{{ item.searchdomain | default("lab.blerdmh.local") }}' \
+        --onboot '{{ (item.onboot | default(true)) | ternary(1, 0) }}' \
+        --unprivileged '{{ (item.unprivileged | default(true)) | ternary(1, 0) }}' \
+        --description '{{ item.description | default("") }}' \
+        --password '{{ vault_lxc_root_password }}'
+  delegate_to: "{{ item.node }}"
   loop: "{{ proxmox_lxc_containers }}"
-  delegate_to: localhost
-  become: false
-  when: nfs_iso_check.rc == 0
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.hostname }})"
+  register: proxmox_lxc_create
+  changed_when: "'creating' in (proxmox_lxc_create.stdout | default(''))"
+  no_log: true
+  when: proxmox_nfs_iso_check.rc == 0
 
 - name: Start LXC containers
-  community.general.proxmox:
-    api_host: "{{ proxmox_api_host }}"
-    api_user: "{{ proxmox_api_user }}@pam"
-    api_token_id: "ansible"
-    api_token_secret: "{{ vault_proxmox_api_token_secret }}"
-    vmid: "{{ item.vmid }}"
-    node: "{{ item.node }}"
-    state: started
+  ansible.builtin.command:
+    cmd: pct start {{ item.vmid }}
+  delegate_to: "{{ item.node }}"
   loop: "{{ proxmox_lxc_containers }}"
-  delegate_to: localhost
-  become: false
-  when: nfs_iso_check.rc == 0
-
-- name: Extract IP from netif for readiness check
-  ansible.builtin.set_fact:
-    _lxc_readiness_targets: >-
-      {{
-        proxmox_lxc_containers
-        | map('combine', {'_wait_ip':
-            (item.netif.net0 | regex_search('ip=([0-9.]+)', '\\1') | first)
-          })
-        | list
-      }}
-  when: nfs_iso_check.rc == 0
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.hostname }})"
+  register: proxmox_lxc_start
+  changed_when: proxmox_lxc_start.rc == 0
+  failed_when:
+    - proxmox_lxc_start.rc != 0
+    - "'already running' not in (proxmox_lxc_start.stderr | default(''))"
+  when: proxmox_nfs_iso_check.rc == 0
 
 - name: Wait for LXC containers to be reachable
   ansible.builtin.wait_for:
@@ -138,5 +129,19 @@
   loop: "{{ proxmox_lxc_containers }}"
   delegate_to: localhost
   become: false
-  failed_when: result.rc != 0 and "expected error text" not in result.stderr
-  when: nfs_iso_check.rc == 0
+  register: proxmox_lxc_ssh_wait
+  failed_when: false
+  when: proxmox_nfs_iso_check.rc == 0
+
+- name: Report LXC containers that did not respond on SSH
+  ansible.builtin.debug:
+    msg: >
+      WARNING: LXC {{ item.item.hostname }} (vmid {{ item.item.vmid }}) did not respond
+      on SSH within 60s. Check 'pct status {{ item.item.vmid }}' on
+      {{ item.item.node }} and inspect the container console for errors.
+  loop: "{{ proxmox_lxc_ssh_wait.results | default([]) }}"
+  loop_control:
+    label: "vmid {{ item.item.vmid }}"
+  when:
+    - proxmox_nfs_iso_check.rc == 0
+    - item.failed | default(false)

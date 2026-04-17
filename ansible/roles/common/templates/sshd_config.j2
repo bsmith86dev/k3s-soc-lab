@@ -10,18 +10,18 @@ ListenAddress 0.0.0.0
 
 # Authentication
 PermitRootLogin {{ common_ssh_permit_root_login }}
-PubkeyAuthentication true
+PubkeyAuthentication yes
 AuthorizedKeysFile .ssh/authorized_keys
 PasswordAuthentication no
 PermitEmptyPasswords no
 ChallengeResponseAuthentication no
-UsePAM true
+UsePAM yes
 KbdInteractiveAuthentication no
 
 # Hardening
 X11Forwarding no
 PrintMotd no
-PrintLastLog true
+PrintLastLog yes
 Banner /etc/motd
 MaxAuthTries {{ common_ssh_max_auth_tries }}
 MaxSessions {{ common_ssh_max_sessions }}

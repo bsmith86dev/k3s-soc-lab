@@ -16,7 +16,7 @@
 - name: Verify NFS connectivity to TrueNAS
   ansible.builtin.command:
     cmd: showmount -e {{ proxmox_truenas_ip }}
-  register: nfs_check
+  register: proxmox_nfs_check
   changed_when: false
   failed_when: false
 
@@ -26,7 +26,7 @@
       WARNING: TrueNAS NFS at {{ proxmox_truenas_ip }} not reachable.
       Skipping NFS storage registration.
       Ensure TrueNAS is online and NFS shares are configured.
-  when: nfs_check.rc != 0
+  when: proxmox_nfs_check.rc != 0
 
 - name: Register NFS backup storage backend
   ansible.builtin.command:
@@ -37,12 +37,12 @@
       --content backup,snippets
       --nodes {{ proxmox_cluster_nodes | join(',') }}
       --options vers=4
-  register: pvesm_backups
-  changed_when: pvesm_backups.rc == 0
+  register: proxmox_pvesm_backups
+  changed_when: proxmox_pvesm_backups.rc == 0
   failed_when:
-    - pvesm_backups.rc != 0
-    - "'already defined' not in pvesm_backups.stderr"
-  when: nfs_check.rc == 0
+    - proxmox_pvesm_backups.rc != 0
+    - "'already defined' not in proxmox_pvesm_backups.stderr"
+  when: proxmox_nfs_check.rc == 0
   run_once: true   # storage.cfg is cluster-wide — pmxcfs replicates it
 
 - name: Register NFS ISO storage backend
@@ -54,20 +54,20 @@
       --content iso,vztmpl
       --nodes {{ proxmox_cluster_nodes | join(',') }}
       --options vers=4
-  register: pvesm_iso
-  changed_when: pvesm_iso.rc == 0
+  register: proxmox_pvesm_iso
+  changed_when: proxmox_pvesm_iso.rc == 0
   failed_when:
-    - pvesm_iso.rc != 0
-    - "'already defined' not in pvesm_iso.stderr"
-  when: nfs_check.rc == 0
+    - proxmox_pvesm_iso.rc != 0
+    - "'already defined' not in proxmox_pvesm_iso.stderr"
+  when: proxmox_nfs_check.rc == 0
   run_once: true   # storage.cfg is cluster-wide — pmxcfs replicates it
 
 - name: Verify storage backends registered
   ansible.builtin.command:
     cmd: pvesm status
-  register: pvesm_status
+  register: proxmox_pvesm_status
   changed_when: false
 
 - name: Display storage status
   ansible.builtin.debug:
-    msg: "{{ pvesm_status.stdout_lines }}"
+    msg: "{{ proxmox_pvesm_status.stdout_lines }}"

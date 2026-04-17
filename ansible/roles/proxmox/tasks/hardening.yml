@@ -9,7 +9,7 @@
     block: |
       PermitRootLogin prohibit-password
       PasswordAuthentication no
-      PubkeyAuthentication true
+      PubkeyAuthentication yes
       AuthorizedKeysFile .ssh/authorized_keys
       X11Forwarding no
       MaxAuthTries 3
