@@ -3,26 +3,55 @@
 # Pre-flight checks before k3s install
 # Catches common problems early — saves debugging time later
 
-- name: Check OS is Ubuntu 22.04 or 24.04
+- name: Configure passwordless sudo for Ansible user
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ ansible_user }}-nopasswd"
+    content: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL\n"  # pragma: allowlist secret
+    mode: '0440'
+    validate: visudo -cf %s
+
+# Bootstrap DNS: set a public resolver for the duration of this Ansible run.
+# k3s VMs sit on VLAN 20 and use the pfSense SERVERS interface (10.0.20.1)
+# as their nameserver, but the SERVERS firewall blocks RFC1918 by default
+# until the pfsense role's DNS rule is applied. Using resolvectl here sets
+# the runtime resolver on the default interface immediately — no service
+# restart needed — so all subsequent tasks (install script, kubectl apply,
+# image pulls) can reach the internet. Once the pfSense DNS rule is in
+# place this task is effectively a no-op (public DNS still works).
+- name: Bootstrap DNS — check if resolvectl is available
+  ansible.builtin.stat:
+    path: /usr/bin/resolvectl
+  register: k3s_resolvectl_bin
+
+- name: Bootstrap DNS — set public resolver for Ansible run
+  ansible.builtin.command:
+    cmd: resolvectl dns {{ ansible_default_ipv4.interface }} 1.1.1.1 8.8.8.8
+  changed_when: false
+  when: k3s_resolvectl_bin.stat.exists
+
+- name: Check OS is Ubuntu 22.04+ or Debian 11+
   ansible.builtin.assert:
     that:
-      - ansible_distribution == "Ubuntu"
-      - ansible_distribution_major_version | int >= 22
-    fail_msg: "k3s role requires Ubuntu 22.04 or 24.04. Found: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      - ansible_distribution in ["Ubuntu", "Debian"]
+      - ansible_distribution_major_version | int >= (11 if ansible_distribution == "Debian" else 22)
+    fail_msg: "k3s role requires Ubuntu 22.04+ or Debian 11+. Found: {{ ansible_distribution }} {{ ansible_distribution_version }}"
     success_msg: "OS check passed: {{ ansible_distribution }} {{ ansible_distribution_version }}"
 
 - name: Check minimum RAM (2GB)
   ansible.builtin.assert:
     that:
-      - ansible_memtotal_mb >= 1800
-    fail_msg: "Insufficient RAM: {{ ansible_memtotal_mb }}MB. Minimum 2GB required."
+      - ansible_memtotal_mb >= k3s_min_ram_mb
+    fail_msg: "Insufficient RAM: {{ ansible_memtotal_mb }}MB. Minimum {{ k3s_min_ram_mb }}MB required."
     success_msg: "RAM check passed: {{ ansible_memtotal_mb }}MB"
 
-- name: Check minimum disk space on / (10GB free)
+- name: Check minimum disk space on /
   ansible.builtin.assert:
     that:
-      - (ansible_mounts | selectattr('mount', 'equalto', '/') | list | first).size_available > 10737418240
-    fail_msg: "Insufficient disk space on /. Need at least 10GB free."
+      - (ansible_mounts | selectattr('mount', 'equalto', '/') | list | first).size_available > k3s_min_disk_bytes
+    fail_msg: >-
+      Insufficient disk space on /. Need at least
+      {{ (k3s_min_disk_bytes / 1073741824) | round(1) }}GB free,
+      have {{ ((ansible_mounts | selectattr('mount', 'equalto', '/') | list | first).size_available / 1073741824) | round(1) }}GB.
     success_msg: "Disk space check passed"
 
 - name: Check hostname is set correctly
@@ -51,13 +80,13 @@
 - name: Check if swap is disabled
   ansible.builtin.command:
     cmd: swapon --summary
-  register: swap_status
+  register: k3s_swap_status
   changed_when: false
 
 - name: Disable swap (k3s recommendation)
   ansible.builtin.command:
     cmd: swapoff -a
-  when: swap_status.stdout | length > 0
+  when: k3s_swap_status.stdout | length > 0
   changed_when: true
 
 - name: Remove swap from fstab permanently

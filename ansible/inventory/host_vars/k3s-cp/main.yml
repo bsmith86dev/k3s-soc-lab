@@ -1,6 +1,6 @@
 ---
 # ansible/inventory/host_vars/k3s-cp/main.yml
-# Pi 4 — k3s control plane + Tailscale subnet router
+# Pi 4 512GB SSD — k3s control plane + Tailscale subnet router
 
 k3s_tailscale_subnet_router: true
 

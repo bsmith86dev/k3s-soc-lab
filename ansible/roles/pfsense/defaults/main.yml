@@ -18,6 +18,8 @@ pfsense_n1mini_mac: "{{ vault_n1mini_mac }}"
 pfsense_zimaboard_mac: "{{ vault_zimaboard_mac }}"
 pfsense_pi4_mac: "{{ vault_pi4_mac }}"
 pfsense_pi5_mac: "{{ vault_pi5_mac }}"
+pfsense_k3s_w2_amd_mac: "{{ vault_k3s_w2_amd_mac }}"
+pfsense_k3s_w3_n1_mac: "{{ vault_k3s_w3_n1_mac }}"
 
 # pfSense WAN interface name
 pfsense_wan_interface: "igc0"
@@ -47,11 +49,15 @@ pfsense_dns_overrides:
   - host: k3s-cp
     domain: lab.blerdmh.local
     ip: "10.0.20.10"
-    descr: "Pi 4 k3s control plane"
-  - host: k3s-w1
+    descr: "Pi 4 8GB USB-NVMe — k3s control plane + Tailscale subnet router"
+  - host: k3s-w2-amd
     domain: lab.blerdmh.local
-    ip: "10.0.20.11"
-    descr: "Pi 5 k3s worker node"
+    ip: "10.0.20.12"
+    descr: "AMD k3s worker node (GPU)"
+  - host: k3s-w3-n1
+    domain: lab.blerdmh.local
+    ip: "10.0.20.13"
+    descr: "N1 Mini k3s worker node"
   - host: gitea
     domain: lab.blerdmh.local
     ip: "10.0.10.50"

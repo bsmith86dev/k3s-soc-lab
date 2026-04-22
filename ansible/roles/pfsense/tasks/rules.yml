@@ -35,6 +35,37 @@
     # descr:"DNS resolution for MGMT VLAN"
     state: present
 
+# Proxmox nodes live on MGMT (10.0.10.20/21) but their NFS storage and
+# PBS backup target sit on SERVERS VLAN. Cross-VLAN traffic enters
+# pfSense on the SOURCE interface (MGMT) — the SERVERS-interface rules
+# never match because PROXMOX_NODES are never the source on SERVERS.
+# Must land before MGMT_block_lateral or the block matches first.
+- name: "MGMT | Allow Proxmox nodes to reach NAS (NFSv4)"
+  pfsensible.core.pfsense_rule:
+    name: "MGMT_pve_to_nas_nfs"
+    interface: "MGMT"
+    source: "PROXMOX_NODES"
+    destination: "NAS_HOST"
+    protocol: tcp
+    destination_port: "NFS_PORTS"
+    action: pass
+    before: "MGMT_block_lateral"
+    # descr:"Proxmox NFS mount to TrueNAS (portmapper, nfs, mountd)"
+    state: present
+
+- name: "MGMT | Allow Proxmox nodes to reach PBS API"
+  pfsensible.core.pfsense_rule:
+    name: "MGMT_pve_to_pbs"
+    interface: "MGMT"
+    source: "PROXMOX_NODES"
+    destination: "PBS_HOST"
+    protocol: tcp
+    destination_port: "PBS_API_PORT"
+    action: pass
+    before: "MGMT_block_lateral"
+    # descr:"Proxmox Backup Server API for backup/restore jobs"
+    state: present
+
 - name: "MGMT | Block MGMT to RFC1918 (non-admin hosts)"
   pfsensible.core.pfsense_rule:
     name: "MGMT_block_lateral"
@@ -57,62 +88,67 @@
 
 # ─── SERVERS VLAN 20 ─────────────────────────────────────────────────────
 
-- name: "SERVERS | Allow k3s nodes to reach NAS (NFS)"
+# Cleanup: k3s nodes (10.0.20.10/12/13) and TrueNAS (10.0.20.5) are in
+# the same VLAN. Intra-VLAN traffic is L2-switched at the MokerLink and
+# never reaches pfSense, so these rules can never match. Removing.
+- name: "SERVERS | (cleanup) remove dead k3s→NAS NFS rule"
   pfsensible.core.pfsense_rule:
     name: "SERVERS_k3s_to_nas_nfs"
     interface: "SERVERS"
-    source: "K3S_NODES"
-    destination: "NAS_HOST"
-    protocol: tcp
-    destination_port: 2049
-    action: pass
-    # descr:"k3s nodes NFS mount to TrueNAS"
-    state: present
+    state: absent
 
-- name: "SERVERS | Allow k3s nodes to reach NAS (NFSv4 additional ports)"
+- name: "SERVERS | (cleanup) remove dead k3s→NAS NFSv4 rule"
   pfsensible.core.pfsense_rule:
     name: "SERVERS_k3s_to_nas_nfsv4"
     interface: "SERVERS"
-    source: "K3S_NODES"
-    destination: "NAS_HOST"
-    protocol: tcp
-    destination_port: "NFS_PORTS"
-    action: pass
-    # descr:"NFSv4 portmapper and mount daemon"
-    state: present
+    state: absent
 
-- name: "SERVERS | Allow k3s nodes internet egress"
+# Internet egress is needed by every host on the SERVERS VLAN, not just
+# the k3s nodes (TrueNAS pulls updates, PBS pulls Debian packages, etc.).
+# Source must be the entire VLAN — narrowing to K3S_NODES previously
+# meant TrueNAS at 10.0.20.5 had no path off-net and broke during updates.
+- name: "SERVERS | Allow SERVERS VLAN internet egress"
   pfsensible.core.pfsense_rule:
-    name: "SERVERS_k3s_inet"
+    name: "SERVERS_inet"
     interface: "SERVERS"
-    source: "K3S_NODES"
+    source: "10.0.20.0/24"
     destination: "!RFC1918"
     action: pass
-    # descr:"k3s nodes pull container images etc"
+    before: "SERVERS_block_lateral"
+    # descr:"All SERVERS hosts: container pulls, package updates, threat intel"
     state: present
 
-- name: "SERVERS | Allow Proxmox nodes to reach NAS (NFS)"
+# Cleanup: PROXMOX_NODES live on MGMT VLAN (10.0.10.x), so they can
+# never be the source on the SERVERS interface — these rules were dead
+# the moment they shipped. Replaced by MGMT_pve_to_nas_nfs / MGMT_pve_to_pbs
+# above, which sit on the correct ingress interface.
+- name: "SERVERS | (cleanup) remove dead pve→NAS NFS rule"
   pfsensible.core.pfsense_rule:
     name: "SERVERS_pve_to_nas_nfs"
     interface: "SERVERS"
-    source: "PROXMOX_NODES"
-    destination: "NAS_HOST"
-    protocol: tcp
-    destination_port: "2049"
-    action: pass
-    # descr:"Proxmox NFS mount to TrueNAS"
-    state: present
+    state: absent
 
-- name: "SERVERS | Allow Proxmox nodes to reach NAS (PBS API)"
+- name: "SERVERS | (cleanup) remove dead pve→NAS PBS rule"
   pfsensible.core.pfsense_rule:
     name: "SERVERS_pve_to_nas_pbs"
     interface: "SERVERS"
-    source: "PROXMOX_NODES"
-    destination: "NAS_HOST"
-    protocol: tcp
-    destination_port: "PBS_API_PORT"
+    state: absent
+
+# DNS allow must cover the entire VLAN — TrueNAS, PBS, and any future
+# SERVERS host hands out 10.0.20.1 as resolver via DHCP. Sourcing only
+# K3S_NODES previously meant TrueNAS DNS lookups hit SERVERS_block_lateral
+# and were silently dropped (10.0.20.1 is RFC1918 → matches the block).
+- name: "SERVERS | Allow SERVERS VLAN DNS to pfSense Unbound"
+  pfsensible.core.pfsense_rule:
+    name: "SERVERS_dns"
+    interface: "SERVERS"
+    source: "10.0.20.0/24"
+    destination: "10.0.20.1"
+    protocol: udp
+    destination_port: "53"
     action: pass
-    # descr:"Proxmox Backup Server API port"
+    before: "SERVERS_block_lateral"
+    # descr:"All SERVERS hosts resolve via pfSense Unbound on SERVERS interface"
     state: present
 
 - name: "SERVERS | Block inter-server lateral movement by default"
@@ -126,6 +162,23 @@
     state: present
 
 # ─── SECURITY VLAN 40 ────────────────────────────────────────────────────
+
+# Every SECURITY VM resolves DNS via 10.0.40.1 (pushed by DHCP). Without
+# this allow, queries hit SECURITY_block_other (10.0.40.1 is RFC1918) and
+# Wazuh / Suricata / OpenVAS lose DNS — threat intel pulls and rule
+# updates silently fail.
+- name: "SECURITY | Allow SECURITY VLAN DNS to pfSense Unbound"
+  pfsensible.core.pfsense_rule:
+    name: "SECURITY_dns"
+    interface: "SECURITY"
+    source: "10.0.40.0/24"
+    destination: "10.0.40.1"
+    protocol: udp
+    destination_port: "53"
+    action: pass
+    before: "SECURITY_block_other"
+    # descr:"All SECURITY hosts resolve via pfSense Unbound on SECURITY interface"
+    state: present
 
 - name: "SECURITY | Allow SECURITY_VMS to read logs from all VLANs (Wazuh)"
   pfsensible.core.pfsense_rule:

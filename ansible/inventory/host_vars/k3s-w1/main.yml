@@ -1,6 +1,6 @@
 ---
 # ansible/inventory/host_vars/k3s-w1/main.yml
-# Pi 5 — k3s worker node
+# Pi 4 8GB USB-NVMe — k3s worker node
 
 common_ufw_extra_rules:
   - {rule: allow, port: "10250", proto: tcp, src: "10.0.20.0/24", comment: "kubelet metrics"}

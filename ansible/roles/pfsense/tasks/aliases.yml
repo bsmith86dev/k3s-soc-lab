@@ -23,8 +23,8 @@
   pfsensible.core.pfsense_alias:
     name: K3S_NODES
     type: host
-    address: "10.0.20.10 10.0.20.11 10.0.20.12 10.0.20.13"
-    descr: "k3s control plane and worker nodes — host type (individual IPs)"
+    address: "10.0.20.10 10.0.20.12 10.0.20.13"
+    descr: "k3s control plane (10.0.20.10) + workers (10.0.20.12, 10.0.20.13)"
     state: present
 
 - name: Create alias — SECURITY_VMS (VLAN 40 security stack hosts)
@@ -41,6 +41,14 @@
     type: host
     address: "10.0.20.5"   # ZimaBoard TrueNAS
     descr: "TrueNAS Scale on ZimaBoard"
+    state: present
+
+- name: Create alias — PBS_HOST
+  pfsensible.core.pfsense_alias:
+    name: PBS_HOST
+    type: host
+    address: "10.0.20.30"   # Proxmox Backup Server LXC on n1minipve
+    descr: "Proxmox Backup Server (PBS) LXC"
     state: present
 
 - name: Create alias — DNS_SERVERS

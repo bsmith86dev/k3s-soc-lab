@@ -1,7 +1,7 @@
 ---
 # ansible/roles/k3s/tasks/install-agent.yml
 # Install k3s in agent (worker) mode
-# Targets: Pi 5 (k3s-w1, 10.0.20.11), k3s-w2-amd VM (10.0.20.12)
+# Targets: Pi 4 USB-NVMe (k3s-w1, 10.0.20.11), k3s-w2-amd VM (10.0.20.12)
 #
 # Prerequisite: install-server.yml must have completed on k3s-cp
 # The agent needs the server URL and cluster token to join
@@ -23,6 +23,7 @@
     mode: '0600'
   vars:
     k3s_mode: agent
+  notify: restart k3s agent
 
 - name: Check if k3s agent is already installed
   ansible.builtin.stat:
@@ -37,33 +38,19 @@
     force: true
   when: not k3s_binary.stat.exists
 
+# K3S_URL / K3S_TOKEN / server URL and node-ip all live in
+# /etc/rancher/k3s/config.yaml (rendered from k3s-config.j2). Pass only
+# INSTALL_K3S_EXEC=agent so the installer writes the k3s-agent systemd
+# unit; everything else is read from config.yaml at agent startup.
 - name: Install k3s agent
   ansible.builtin.command:
     cmd: /tmp/k3s-install.sh
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
-    K3S_TOKEN: "{{ vault_k3s_token }}"
-    K3S_URL: "https://{{ k3s_server_ip }}:6443"
-    INSTALL_K3S_EXEC: >-
-      agent
-      --node-ip {{ ansible_host }}
-      --node-label kubernetes.io/hostname={{ inventory_hostname }}
+    INSTALL_K3S_EXEC: agent
   when: not k3s_binary.stat.exists
   changed_when: not k3s_binary.stat.exists
   notify: restart k3s agent
-
-- name: Label GPU worker node
-  ansible.builtin.command:
-    cmd: >
-      k3s kubectl label node {{ inventory_hostname }}
-      gpu=amd-rx5700xt
-      jellyfin-node=true
-      --overwrite
-  delegate_to: "{{ groups['k3s_control_plane'][0] }}"
-  when: has_amd_gpu | default(false) | bool
-  changed_when: true
-  environment:
-    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Ensure k3s agent is enabled and started
   ansible.builtin.systemd:
@@ -71,15 +58,45 @@
     enabled: true
     state: started
 
+# Match the Ready condition by name (not index). conditions[-1] breaks
+# the moment kubernetes adds a new condition type.
 - name: Wait for agent node to appear in cluster
   ansible.builtin.command:
-    cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[-1].type}'
+    cmd: >-
+      k3s kubectl get node {{ inventory_hostname }}
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
   delegate_to: "{{ groups['k3s_control_plane'][0] }}"
-  register: node_status
-  until: node_status.stdout == "Ready"
-  retries: 20
+  register: k3s_node_status
+  until: k3s_node_status.stdout == "True"
+  retries: 30
   delay: 10
   changed_when: false
+  failed_when: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Fail if node never reached Ready
+  ansible.builtin.assert:
+    that:
+      - k3s_node_status.stdout == "True"
+    fail_msg: >-
+      Node {{ inventory_hostname }} did not reach Ready after 5 minutes.
+      Check `systemctl status k3s-agent` and `journalctl -xeu k3s-agent`
+      on the worker.
+
+# Labels must be applied AFTER the node is registered. Running this
+# before the Wait task would fail with 'nodes "{{ inventory_hostname }}"
+# not found' on a cold install.
+- name: Label GPU worker node
+  ansible.builtin.command:
+    cmd: >-
+      k3s kubectl label node {{ inventory_hostname }}
+      gpu=amd-rx5700xt
+      jellyfin-node=true
+      --overwrite
+  delegate_to: "{{ groups['k3s_control_plane'][0] }}"
+  when: has_amd_gpu | default(false) | bool
+  changed_when: true
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 

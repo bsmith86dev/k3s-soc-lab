@@ -144,8 +144,18 @@
     sockets: "{{ item.sockets | default(1) }}"
     memory: "{{ item.memory | default(4096) }}"
     balloon: "{{ item.balloon | default(0) }}"
+    # firewall=0 disables the per-VM Proxmox firewall on this NIC.
+    # The cluster firewall has policy_in: DROP, which would otherwise
+    # silently drop all inbound traffic to the VM. pfSense is the
+    # authoritative network firewall — no need to layer another DROP here.
+    #
+    # When item.mac is set, pin it in the NIC config. Without pinning,
+    # any future `qm set --net0` (or playbook update) replaces net0
+    # entirely and Proxmox generates a fresh random MAC — which breaks
+    # both the pfSense DHCP reservation AND cloud-init's netplan
+    # MAC-match (interface comes back as ens18, DOWN, no IP).
     net:
-      net0: "virtio,bridge=vmbr0,tag={{ item.vlan }}"
+      net0: "virtio{% if item.mac is defined %}={{ item.mac }}{% endif %},bridge=vmbr0,tag={{ item.vlan }},firewall=0"
     ipconfig:
       ipconfig0: "ip={{ item.ip }}/24,gw={{ item.gateway }}"
     # DNS defaults to the per-VLAN gateway (pfSense) so that each VM

@@ -181,6 +181,8 @@ proxmox_vms:
     onboot: true
 
   # ── k3s worker VMs (VLAN 20) ──────────────────────────────────────────
+  # MAC must match the pfSense DHCP reservation in roles/pfsense/tasks/dhcp.yml
+  # AND cloud-init's netplan MAC-match (so eth0 comes up correctly).
   - vmid: 110
     name: k3s-w2-amd
     node: amdpve
@@ -188,6 +190,7 @@ proxmox_vms:
     memory: 16384
     disk_size: "200G"
     vlan: 20
+    mac: "{{ vault_k3s_w2_amd_mac }}"
     ip: "10.0.20.12"
     gateway: "10.0.20.1"
     dns: "10.0.20.1"
@@ -202,6 +205,7 @@ proxmox_vms:
     memory: 10240
     disk_size: "200G"
     vlan: 20
+    mac: "{{ vault_k3s_w3_n1_mac }}"
     ip: "10.0.20.13"
     gateway: "10.0.20.1"
     dns: "10.0.20.1"

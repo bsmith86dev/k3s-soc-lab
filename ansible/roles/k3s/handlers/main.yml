@@ -24,3 +24,9 @@
   ansible.builtin.systemd:
     daemon_reload: true
   listen: "reload systemd"
+
+- name: Reboot host and wait for it to come back
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+    msg: "Rebooting to apply cgroup/kernel changes"
+  listen: "reboot host"

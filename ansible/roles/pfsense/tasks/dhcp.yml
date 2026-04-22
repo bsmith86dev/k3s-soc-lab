@@ -14,13 +14,19 @@
     domain: "lab.blerdmh.local"
     state: present
 
+# Each VLAN's DHCP MUST hand out its own gateway IP as the DNS server.
+# pfSense Unbound listens on every interface (active_interface: all in
+# dns.yml), so 10.0.20.1 / 10.0.40.1 are valid resolvers from inside
+# their own VLAN. Pushing a cross-VLAN DNS (e.g. 10.0.10.1) gets
+# silently dropped by the per-VLAN block_lateral rule and breaks DNS
+# for every DHCP client on that VLAN.
 - name: "DHCP | Configure SERVERS VLAN 20 DHCP pool"
   pfsensible.core.pfsense_dhcp_server:
     interface: "SERVERS"
     enable: true
     range_from: "10.0.20.100"
     range_to: "10.0.20.199"
-    dnsserver: "10.0.10.1"
+    dnsserver: "10.0.20.1"
     gateway: "10.0.20.1"
     domain: "lab.blerdmh.local"
     state: present
@@ -31,7 +37,7 @@
     enable: true
     range_from: "10.0.40.100"
     range_to: "10.0.40.199"
-    dnsserver: "10.0.10.1"
+    dnsserver: "10.0.40.1"
     gateway: "10.0.40.1"
     domain: "lab.blerdmh.local"
     state: present
@@ -80,6 +86,26 @@
     descr: "ZimaBoard 832 — TrueNAS Scale NAS"
     state: present
 
+- name: "DHCP | Reserve — k3s-w2-amd AMD worker VM (VLAN 20)"
+  pfsensible.core.pfsense_dhcp_static:
+    netif: "SERVERS"
+    macaddr: "{{ pfsense_k3s_w2_amd_mac }}"
+    ipaddr: "10.0.20.12"
+    name: "k3s-w2-amd"
+    hostname: "k3s-w2-amd"
+    descr: "Proxmox VM 110 on amdpve — k3s AMD GPU worker"
+    state: present
+
+- name: "DHCP | Reserve — k3s-w3-n1 N1 Mini worker VM (VLAN 20)"
+  pfsensible.core.pfsense_dhcp_static:
+    netif: "SERVERS"
+    macaddr: "{{ pfsense_k3s_w3_n1_mac }}"
+    ipaddr: "10.0.20.13"
+    name: "k3s-w3-n1"
+    hostname: "k3s-w3-n1"
+    descr: "Proxmox VM 300 on n1minipve — k3s N1 Mini worker"
+    state: present
+
 - name: "DHCP | Reserve — Pi 4 k3s control plane (VLAN 20)"
   pfsensible.core.pfsense_dhcp_static:
     netif: "SERVERS"
@@ -87,15 +113,5 @@
     ipaddr: "10.0.20.10"
     name: "k3s-cp"
     hostname: "k3s-cp"
-    descr: "Raspberry Pi 4 8GB — k3s control plane + Tailscale subnet router"
-    state: present
-
-- name: "DHCP | Reserve — Pi 5 k3s worker (VLAN 20)"
-  pfsensible.core.pfsense_dhcp_static:
-    netif: "SERVERS"
-    macaddr: "{{ vault_pi5_mac }}"
-    ipaddr: "10.0.20.11"
-    name: "k3s-w1"
-    hostname: "k3s-w1"
-    descr: "Raspberry Pi 5 8GB — k3s worker node"
+    descr: "Raspberry Pi 4 8GB USB-NVMe — k3s control plane + Tailscale subnet router"
     state: present

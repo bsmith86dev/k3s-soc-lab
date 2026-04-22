@@ -1,7 +1,7 @@
 ---
 # ansible/roles/k3s/tasks/install-server.yml
 # Install k3s in server (control plane) mode
-# Target: Pi 4 (k3s-cp, 10.0.20.10)
+# Target: Pi 4 512GB SSD (k3s-cp, 10.0.20.10)
 #
 # k3s config is written before install so the installer picks it up
 # The installer script is idempotent — safe to re-run
@@ -23,6 +23,7 @@
     mode: '0600'
   vars:
     k3s_mode: server
+  notify: restart k3s server
 
 - name: Check if k3s is already installed
   ansible.builtin.stat:
@@ -43,17 +44,10 @@
   environment:
     INSTALL_K3S_VERSION: "{{ k3s_version }}"
     K3S_TOKEN: "{{ vault_k3s_token }}"
-    INSTALL_K3S_EXEC: >-
-      server
-      --cluster-init
-      --tls-san {{ ansible_host }}
-      --tls-san k3s-cp.lab.blerdmh.local
-      --tls-san {{ k3s_api_extra_sans | default('') }}
-      --disable traefik
-      --disable servicelb
-      --flannel-backend=host-gw
-      --node-ip {{ ansible_host }}
-      --advertise-address {{ ansible_host }}
+    # No INSTALL_K3S_EXEC — all server config lives in /etc/rancher/k3s/config.yaml
+    # which is deployed before this task runs. The installer writes a clean
+    # ExecStart=/usr/local/bin/k3s server and k3s reads config.yaml at startup.
+    INSTALL_K3S_EXEC: server
   when: not k3s_binary.stat.exists
   changed_when: not k3s_binary.stat.exists
   notify: restart k3s server
@@ -64,39 +58,52 @@
     enabled: true
     state: started
 
-- name: Wait for k3s API server to be ready
+- name: Wait for k3s API server TCP port to open
   ansible.builtin.wait_for:
     port: 6443
     host: "{{ ansible_host }}"
     delay: 10
     timeout: 120
 
+# Wait for kubeconfig to be written — indicates k3s server bootstrap is complete
+- name: Wait for k3s kubeconfig to be created
+  ansible.builtin.wait_for:
+    path: /etc/rancher/k3s/k3s.yaml
+    timeout: 120
+
 - name: Wait for node to reach Ready state
   ansible.builtin.command:
-    cmd: k3s kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[-1].type}'
-  register: node_ready
-  until: node_ready.stdout == "Ready"
-  retries: 20
+    cmd: >-
+      k3s kubectl get node {{ inventory_hostname }}
+      -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  register: k3s_node_ready
+  until: k3s_node_ready.stdout == "True"
+  retries: 30
   delay: 10
   changed_when: false
+  failed_when: false
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Install MetalLB load balancer
   ansible.builtin.command:
     cmd: >
       k3s kubectl apply -f
       https://raw.githubusercontent.com/metallb/metallb/v{{ k3s_metallb_version }}/config/manifests/metallb-native.yaml
-  register: metallb_install
-  changed_when: "'configured' in metallb_install.stdout or 'created' in metallb_install.stdout"
+  register: k3s_metallb_install
+  changed_when: "'configured' in k3s_metallb_install.stdout or 'created' in k3s_metallb_install.stdout"
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
-- name: Wait for MetalLB to be ready
+# rollout status tracks the Deployment object (created synchronously by
+# apply) and waits for it to converge. kubectl wait --for=condition=ready
+# pod fails immediately with "no matching resources" when pods haven't
+# been scheduled yet, which is the race condition we hit here.
+# Speaker DaemonSet is intentionally excluded — speakers need worker
+# nodes to be Ready first, so they are verified in install-agent.yml.
+- name: Wait for MetalLB controller to be ready
   ansible.builtin.command:
-    cmd: >
-      k3s kubectl wait --namespace metallb-system
-      --for=condition=ready pod
-      --selector=app=metallb
-      --timeout=120s
+    cmd: k3s kubectl rollout status deployment/controller -n metallb-system --timeout=120s
   changed_when: false
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
@@ -120,7 +127,6 @@
       metadata:
         name: lab-l2-advert
         namespace: metallb-system
-  notify: apply metallb pool
 
 - name: Apply MetalLB pool config
   ansible.builtin.command:
@@ -134,18 +140,16 @@
     cmd: >
       k3s kubectl apply -f
       https://github.com/cert-manager/cert-manager/releases/download/v{{ k3s_cert_manager_version }}/cert-manager.yaml
-  register: certmgr_install
-  changed_when: "'configured' in certmgr_install.stdout or 'created' in certmgr_install.stdout"
+  register: k3s_certmgr_install
+  changed_when: "'configured' in k3s_certmgr_install.stdout or 'created' in k3s_certmgr_install.stdout"
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Wait for cert-manager to be ready
   ansible.builtin.command:
     cmd: >
-      k3s kubectl wait --namespace cert-manager
-      --for=condition=ready pod
-      --selector=app.kubernetes.io/instance=cert-manager
-      --timeout=120s
+      k3s kubectl rollout status deployment/cert-manager
+      -n cert-manager --timeout=120s
   changed_when: false
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
@@ -155,7 +159,16 @@
     cmd: >
       k3s kubectl apply -f
       https://github.com/bitnami-labs/sealed-secrets/releases/download/v{{ k3s_sealed_secrets_version }}/controller.yaml
-  register: sealedsec_install
-  changed_when: "'configured' in sealedsec_install.stdout or 'created' in sealedsec_install.stdout"
+  register: k3s_sealedsec_install
+  changed_when: "'configured' in k3s_sealedsec_install.stdout or 'created' in k3s_sealedsec_install.stdout"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for Sealed Secrets controller to be ready
+  ansible.builtin.command:
+    cmd: >
+      k3s kubectl rollout status deployment/sealed-secrets-controller
+      -n kube-system --timeout=120s
+  changed_when: false
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml

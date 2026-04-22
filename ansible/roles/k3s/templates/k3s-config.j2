@@ -37,12 +37,16 @@ kubelet-arg:
 server: "https://{{ k3s_server_ip }}:6443"
 token: "{{ vault_k3s_token }}"
 node-ip: "{{ ansible_host }}"
+# Pin node-name to inventory_hostname so kubectl queries always match,
+# regardless of what cloud-init set as the OS hostname.
+node-name: "{{ inventory_hostname }}"
 
 # Kubelet extra args
+# Device plugins (AMD/NVIDIA) work out of the box in k8s 1.27+; the
+# DevicePlugins feature gate was removed and setting it makes kubelet
+# refuse to start. GPU support is enabled by deploying the vendor's
+# device plugin DaemonSet, not by a kubelet flag.
 kubelet-arg:
   - "max-pods=110"
-{% if has_amd_gpu | default(false) | bool %}
-  - "feature-gates=DevicePlugins=true"
-{% endif %}
 
 {% endif %}
