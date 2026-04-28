@@ -1,0 +1,5 @@
+---
+# ansible/inventory/host_vars/kali-red/main.yml
+# Cloud-init creates techinb on this VM — same as all other lab VMs.
+
+common_admin_user: techinb

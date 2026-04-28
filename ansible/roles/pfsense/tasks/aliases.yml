@@ -1,9 +1,8 @@
 ---
 # ansible/roles/pfsense/tasks/aliases.yml
-# Defines all firewall aliases used in rules
-# Run this before rules.yml — rules reference these aliases
+# Firewall aliases used by rules.yml
 
-- name: Create alias — RFC1918 (private IP ranges)
+- name: Create alias — RFC1918
   pfsensible.core.pfsense_alias:
     name: RFC1918
     type: network
@@ -11,52 +10,36 @@
     descr: "All private RFC1918 address space"
     state: present
 
-- name: Create alias — MGMT_HOSTS (admin workstations)
+- name: Create alias — MGMT_NET
+  pfsensible.core.pfsense_alias:
+    name: MGMT_NET
+    type: network
+    address: "10.0.10.0/24"
+    descr: "Management VLAN 10"
+    state: present
+
+- name: Create alias — SERVERS_NET
+  pfsensible.core.pfsense_alias:
+    name: SERVERS_NET
+    type: network
+    address: "10.0.20.0/24"
+    descr: "Servers VLAN 20"
+    state: present
+
+- name: Create alias — SECURITY_NET
+  pfsensible.core.pfsense_alias:
+    name: SECURITY_NET
+    type: network
+    address: "10.0.40.0/24"
+    descr: "Security VLAN 40"
+    state: present
+
+- name: Create alias — MGMT_HOSTS
   pfsensible.core.pfsense_alias:
     name: MGMT_HOSTS
     type: host
-    address: "10.0.10.10"   # Skynet workstation
-    descr: "Authorized management hosts"
-    state: present
-
-- name: Create alias — K3S_NODES (individual k3s host IPs)
-  pfsensible.core.pfsense_alias:
-    name: K3S_NODES
-    type: host
-    address: "10.0.20.10 10.0.20.12 10.0.20.13"
-    descr: "k3s control plane (10.0.20.10) + workers (10.0.20.12, 10.0.20.13)"
-    state: present
-
-- name: Create alias — SECURITY_VMS (VLAN 40 security stack hosts)
-  pfsensible.core.pfsense_alias:
-    name: SECURITY_VMS
-    type: host
-    address: "10.0.40.10 10.0.40.11 10.0.40.12 10.0.40.13"
-    descr: "Wazuh, IDS, OpenVAS, Grafana VMs — host type (individual IPs)"
-    state: present
-
-- name: Create alias — NAS_HOST
-  pfsensible.core.pfsense_alias:
-    name: NAS_HOST
-    type: host
-    address: "10.0.20.5"   # ZimaBoard TrueNAS
-    descr: "TrueNAS Scale on ZimaBoard"
-    state: present
-
-- name: Create alias — PBS_HOST
-  pfsensible.core.pfsense_alias:
-    name: PBS_HOST
-    type: host
-    address: "10.0.20.30"   # Proxmox Backup Server LXC on n1minipve
-    descr: "Proxmox Backup Server (PBS) LXC"
-    state: present
-
-- name: Create alias — DNS_SERVERS
-  pfsensible.core.pfsense_alias:
-    name: DNS_SERVERS
-    type: host
-    address: "10.0.10.1 10.0.10.3"
-    descr: "pfSense DNS + secondary resolver"
+    address: "10.0.10.10"
+    descr: "Authorized management workstation(s); add more admin hosts here"
     state: present
 
 - name: Create alias — PROXMOX_NODES
@@ -64,41 +47,92 @@
     name: PROXMOX_NODES
     type: host
     address: "10.0.10.20 10.0.10.21"
-    descr: "AMDPVE (10.0.10.20) and N1 Mini PVE (10.0.10.21)"
+    descr: "Proxmox nodes on MGMT VLAN — verify these IPs match reality"
     state: present
 
-- name: Create alias — TAILSCALE_SUBNET
+- name: Create alias — K3S_NODES
   pfsensible.core.pfsense_alias:
-    name: TAILSCALE_SUBNET
+    name: K3S_NODES
+    type: host
+    address: "10.0.20.10 10.0.20.12 10.0.20.13"
+    descr: "k3s control-plane (cp) + workers (w2-amd, w3-n1)"
+    state: present
+
+- name: Create alias — NAS_HOST
+  pfsensible.core.pfsense_alias:
+    name: NAS_HOST
+    type: host
+    address: "10.0.20.5"
+    descr: "TrueNAS Scale on ZimaBoard"
+    state: present
+
+- name: Create alias — PBS_HOST
+  pfsensible.core.pfsense_alias:
+    name: PBS_HOST
+    type: host
+    address: "10.0.20.30"
+    descr: "Proxmox Backup Server"
+    state: present
+
+- name: Create alias — DNS_SERVERS
+  pfsensible.core.pfsense_alias:
+    name: DNS_SERVERS
+    type: host
+    address: "10.0.10.1 10.0.20.1 10.0.40.1 10.0.50.1 10.0.60.1 10.0.61.1 10.0.62.1 10.0.70.1"
+    descr: "pfSense Unbound listener IPs per VLAN"
+    state: present
+
+- name: Create alias — SECURITY_VMS
+  pfsensible.core.pfsense_alias:
+    name: SECURITY_VMS
+    type: host
+    address: "10.0.40.10 10.0.40.11 10.0.40.12 10.0.40.13"
+    descr: "Wazuh, IDS, OpenVAS, Grafana VMs"
+    state: present
+
+- name: Create alias — TAILSCALE_REMOTE
+  pfsensible.core.pfsense_alias:
+    name: TAILSCALE_REMOTE
     type: network
     address: "100.64.0.0/10"
-    descr: "Tailscale CGNAT range"
+    descr: "Tailscale tailnet CGNAT range"
     state: present
 
-# ── Port aliases (multi-port groups for firewall rules) ────────────────────
-# pfsense_rule destination_port only accepts a single port or alias name;
-# space-separated lists must be defined here as port-type aliases.
+- name: Create alias — TAILSCALE_ROUTER
+  pfsensible.core.pfsense_alias:
+    name: TAILSCALE_ROUTER
+    type: host
+    address: "10.0.10.30"
+    descr: "Tailscale subnet router on MGMT VLAN — update if different"
+    state: present
 
-- name: Create alias — NFS_PORTS (portmapper + NFS + mountd)
+- name: Create alias — NFS_PORTS
   pfsensible.core.pfsense_alias:
     name: NFS_PORTS
     type: port
     address: "111 2049 20048"
-    descr: "NFSv4 ports: portmapper (111), NFS (2049), mountd (20048)"
+    descr: "NFS ports"
     state: present
 
-- name: Create alias — PBS_API_PORT (Proxmox Backup Server API)
+- name: Create alias — PBS_API_PORT
   pfsensible.core.pfsense_alias:
     name: PBS_API_PORT
     type: port
     address: "8007"
-    descr: "Proxmox Backup Server web/API port"
+    descr: "Proxmox Backup Server API"
     state: present
 
-- name: Create alias — WAZUH_PORTS (agent comms + syslog)
+- name: Create alias — WAZUH_PORTS
   pfsensible.core.pfsense_alias:
     name: WAZUH_PORTS
     type: port
     address: "514 1514 1515"
-    descr: "Wazuh: syslog (514), agent (1514), enrollment (1515)"
+    descr: "Wazuh syslog/agent/enrollment"
     state: present
+
+- name: Create alias — WEB_PORTS
+  pfsensible.core.pfsense_alias:
+    name: WEB_PORTS
+    type: port
+    address: "80 443"
+    descr: "HTTP + HTTPS"

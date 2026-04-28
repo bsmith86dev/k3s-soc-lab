@@ -16,10 +16,14 @@
   community.general.timezone:
     name: "{{ common_timezone }}"
 
+# TrueNAS Scale doesn't include the Debian `locales` package
+# (/var/lib/locales/supported.d and /etc/locale.gen are absent).
+# The default locale file below is still written successfully.
 - name: Set locale
   community.general.locale_gen:
     name: "{{ common_locale }}"
     state: present
+  failed_when: false
 
 - name: Set default locale
   ansible.builtin.copy:

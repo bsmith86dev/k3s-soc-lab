@@ -1,0 +1,10 @@
+---
+# ansible/inventory/group_vars/lxc_containers/main.yml
+# All LXC containers (gitea, pbs, pihole) connect as root —
+# baseline ssh.yml chowns ~/.ssh to common_admin_user.
+
+common_admin_user: root
+
+# LXC root password — used for initial bootstrap before SSH key is deployed.
+# Key auth takes precedence once authorized_keys is populated.
+ansible_password: "{{ vault_lxc_root_password }}"

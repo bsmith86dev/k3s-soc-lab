@@ -1,0 +1,8 @@
+---
+# ansible/inventory/host_vars/openvas-vm/main.yml
+# OpenVAS / Greenbone — vulnerability scanner.
+# Web UI accepts MGMT only; scans are outbound (no ingress needed for those).
+
+common_ufw_extra_rules:
+  - {rule: allow, port: "9392", proto: tcp, src: "10.0.10.0/24", comment: "Greenbone web UI (MGMT only)"}
+  - {rule: allow, port: "443", proto: tcp, src: "10.0.10.0/24", comment: "Greenbone HTTPS (MGMT only)"}

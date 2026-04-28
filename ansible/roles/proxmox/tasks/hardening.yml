@@ -62,12 +62,24 @@
       policy_out: ACCEPT
 
       [RULES]
-      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 8006 -log info # Proxmox web UI from MGMT
-      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 22 -log info   # SSH from MGMT
-      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 3128 -log info # SPICE proxy from MGMT
-      IN ACCEPT -p tcp -dport 5405:5412 -log nolog                  # Corosync cluster comms
-      IN ACCEPT -p udp -dport 5405:5412 -log nolog                  # Corosync cluster comms
-      IN DROP -log warning                                           # Drop everything else
+      # ── MGMT VLAN (10.0.10.0/24) ──────────────────────────────────────────
+      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 8006 -log info  # PVE web UI
+      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 22 -log info    # SSH
+      IN ACCEPT -source 10.0.10.0/24 -p tcp -dport 3128 -log info  # SPICE proxy
+      IN ACCEPT -source 10.0.10.0/24 -p icmp -log nolog            # ICMP ping (monitoring)
+      # ── Tailscale remote management ────────────────────────────────────────
+      IN ACCEPT -source 100.64.0.0/10 -p tcp -dport 8006 -log info # PVE web UI via Tailscale
+      IN ACCEPT -source 100.64.0.0/10 -p tcp -dport 22 -log info   # SSH via Tailscale
+      IN ACCEPT -source 100.64.0.0/10 -p tcp -dport 3128 -log info # SPICE via Tailscale
+      # ── Tailscale WireGuard (physical NIC — required for tunnel setup) ─────
+      IN ACCEPT -p udp -dport 41641 -log nolog
+      # ── Intra-cluster: Corosync + VM live migration (node IPs only) ────────
+      # 10.0.10.20/31 covers amdpve (.20) and n1minipve (.21)
+      IN ACCEPT -source 10.0.10.20/31 -p tcp -dport 5405:5412 -log nolog
+      IN ACCEPT -source 10.0.10.20/31 -p udp -dport 5405:5412 -log nolog
+      IN ACCEPT -source 10.0.10.20/31 -p tcp -dport 60000:60050 -log nolog
+      # ── Default deny ───────────────────────────────────────────────────────
+      IN DROP -log warning
       EOF
   changed_when: true
   run_once: true   # cluster.fw is replicated by pmxcfs; pmxcfs FUSE doesn't support chmod/atomic rename

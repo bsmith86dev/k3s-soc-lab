@@ -217,36 +217,46 @@
     label: "vmid {{ item.vmid }} ({{ item.name }})"
   when: proxmox_vm_template_check.rc == 0
 
-# Health check via QEMU guest agent — runs ON the Proxmox node, NOT the controller.
-# The Ansible control host typically has no L3 route to VM VLANs (e.g. VLAN 40),
-# so a TCP wait_for from localhost will always time out. The guest agent travels
-# over the QEMU virtio-serial bus and works regardless of guest network state.
-# Ubuntu cloud images ship with qemu-guest-agent installed; cloud-init enables it
-# on first boot once the agent: enabled=1 flag is set in the VM config above.
-- name: Wait for VMs to be reachable via SSH
-  ansible.builtin.wait_for:
-    host: "{{ item.ip }}"
-    port: 22
-    delay: 15
-    timeout: 180
-    state: started
-  loop: "{{ proxmox_vms }}"
-  delegate_to: localhost
-  vars:
-    ansible_python_interpreter: /home/workbench/CSLAB/SOC/blerdmh-lab/.venv/bin/python3
-  register: proxmox_vm_ssh_wait
-  failed_when: false
-  when: proxmox_vm_template_check.rc == 0
-
-- name: Report VMs that did not respond on SSH
-  ansible.builtin.debug:
-    msg: >
-      WARNING: VM {{ item.item.name }} (vmid {{ item.item.vmid }}) did not respond
-      on SSH within 180s. Check 'qm status {{ item.item.vmid }}' on
-      {{ item.item.node }} and inspect the VM console for cloud-init errors.
-  loop: "{{ proxmox_vm_ssh_wait.results | default([]) }}"
-  loop_control:
-    label: "vmid {{ item.item.vmid }}"
+# Use QEMU guest agent ping (virtio-serial) instead of TCP wait_for.
+# The controller (Skynet) has no L3 route to SECURITY/RED_TEAM VLANs —
+# a TCP connect from localhost will time out for every VM in those VLANs,
+# hanging the play for (n_vms × timeout) seconds. The guest agent travels
+# over the virtio-serial bus and works regardless of guest network state.
+# Skips VMs with onboot: false — they won't be running at this point.
+- name: Give VMs initial time to boot before probing guest agent
+  ansible.builtin.pause:
+    seconds: 30
   when:
     - proxmox_vm_template_check.rc == 0
-    - item.failed | default(false)
+    - proxmox_vms | selectattr('onboot', 'defined') | selectattr('onboot', 'equalto', true) | list | length > 0
+
+- name: Wait for QEMU guest agent to respond
+  ansible.builtin.command:
+    cmd: qm agent {{ item.vmid }} ping
+  delegate_to: "{{ item.node }}"
+  loop: "{{ proxmox_vms }}"
+  loop_control:
+    label: "vmid {{ item.vmid }} ({{ item.name }})"
+  register: proxmox_vm_agent_ping
+  until: proxmox_vm_agent_ping.rc == 0
+  retries: 12
+  delay: 5
+  changed_when: false
+  failed_when: false
+  when:
+    - proxmox_vm_template_check.rc == 0
+    - item.onboot | default(true)
+
+- name: Report VMs whose guest agent did not respond
+  ansible.builtin.debug:
+    msg: >
+      WARNING: VM {{ item.item.name }} (vmid {{ item.item.vmid }}) guest agent
+      did not respond after 5 minutes. Check 'qm status {{ item.item.vmid }}'
+      on {{ item.item.node }} and inspect the console for cloud-init errors.
+  loop: "{{ proxmox_vm_agent_ping.results | default([]) }}"
+  loop_control:
+    label: "vmid {{ item.item.vmid | default('?') }}"
+  when:
+    - proxmox_vm_template_check.rc == 0
+    - item.skipped is not defined or not item.skipped
+    - item.rc | default(1) != 0

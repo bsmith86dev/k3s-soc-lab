@@ -5,12 +5,70 @@
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
-    cache_valid_time: 3600
+    cache_valid_time: 0
+
+# Repair any broken deps left by partial upgrades before we add more packages.
+# apt-get install -f is the correct tool for this; fix_broken is not a valid
+# apt module parameter in Ansible < 2.13.
+- name: Fix broken package dependencies
+  ansible.builtin.command:
+    update_cache: true
+    upgrade: dist
+    force_apt_get: true
+  changed_when: false
+  failed_when: false
+
+# Upgrade existing packages before installing new ones. `dist` (not `safe`)
+# is required because SONAME bumps like libaudit1 .build1 → .build1.1 need
+# the matching newer auditd to come along — `safe` won't install/remove
+# packages to satisfy deps and leaves auditd held broken on k3s-cp.
+- name: Upgrade packages to resolve dependency conflicts
+  ansible.builtin.apt:
+    upgrade: dist
+
+# Ubuntu noble's -security pushed libaudit1 .build1.1 ahead of the matching
+# auditd / libauparse0t64 rebuilds. `state: latest` pulls libaudit1 up
+# while auditd's candidate is still .build1, and auditd's strict `(= .build1)`
+# dependency on libaudit1 deadlocks apt with "held broken packages".
+#
+# Fix: pin all three to whatever the cache says auditd's candidate version
+# currently is, with --allow-downgrades so libaudit1 can be reverted to
+# match. Idempotent — when noble eventually publishes auditd .build1.1
+# the candidate advances and all three move forward together.
+- name: Realign auditd dep cluster to a single consistent version
+  ansible.builtin.shell:
+    executable: /bin/bash
+    cmd: |
+      set -euo pipefail
+      auditd_ver=$(apt-cache policy auditd | awk '/Candidate:/ {print $2}')
+      if [ -z "$auditd_ver" ] || [ "$auditd_ver" = "(none)" ]; then
+        echo "auditd not in cache; nothing to align"
+        exit 0
+      fi
+      cur_lib=$(dpkg-query -W -f='${Version}' libaudit1 2>/dev/null || echo missing)
+      cur_par=$(dpkg-query -W -f='${Version}' libauparse0t64 2>/dev/null || echo missing)
+      cur_aud=$(dpkg-query -W -f='${Version}' auditd 2>/dev/null || echo missing)
+      if [ "$cur_lib" = "$auditd_ver" ] \
+         && [ "$cur_par" = "$auditd_ver" ] \
+         && [ "$cur_aud" = "$auditd_ver" ]; then
+        echo "already aligned at $auditd_ver"
+        exit 0
+      fi
+      echo "realigning to $auditd_ver (was libaudit1=$cur_lib libauparse0t64=$cur_par auditd=$cur_aud)"
+      apt-get install -y --allow-downgrades \
+        -o Dpkg::Options::=--force-confdef \
+        -o Dpkg::Options::=--force-confold \
+        "libaudit1=$auditd_ver" \
+        "libauparse0t64=$auditd_ver" \
+        "auditd=$auditd_ver"
+  register: auditd_realign
+  changed_when: "'realigning' in auditd_realign.stdout"
 
 - name: Install baseline packages
   ansible.builtin.apt:
     name: "{{ common_packages }}"
     state: present
+    allow_change_held_packages: true
 
 - name: Remove unnecessary packages
   ansible.builtin.apt:

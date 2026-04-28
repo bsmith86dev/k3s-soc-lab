@@ -19,6 +19,10 @@
       *.* @{{ common_wazuh_manager_ip }}:514
     marker: "# {mark} ANSIBLE MANAGED — WAZUH FORWARDING"
   notify: restart rsyslog
+  # Skip on the Wazuh manager itself — forwarding 10.0.40.10 → 10.0.40.10
+  # creates a UDP loop and floods the local Wazuh syslog input with its
+  # own output. The manager ingests its own logs via the local agent.
+  when: inventory_hostname not in groups['wazuh_manager'] | default([])
 
 
 - name: Configure local log retention

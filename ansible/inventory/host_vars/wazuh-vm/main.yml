@@ -1,0 +1,12 @@
+---
+# ansible/inventory/host_vars/wazuh-vm/main.yml
+# Wazuh manager — receives agent traffic, syslog, API queries, dashboard.
+
+common_ufw_extra_rules:
+  - {rule: allow, port: "1514", proto: tcp, src: "10.0.0.0/8", comment: "Wazuh agent reporting"}
+  - {rule: allow, port: "1515", proto: tcp, src: "10.0.0.0/8", comment: "Wazuh agent enrollment"}
+  - {rule: allow, port: "514", proto: udp, src: "10.0.0.0/8", comment: "Syslog ingest from all VLANs"}
+  - {rule: allow, port: "514", proto: tcp, src: "10.0.0.0/8", comment: "Syslog TCP ingest"}
+  - {rule: allow, port: "55000", proto: tcp, src: "10.0.10.0/24", comment: "Wazuh REST API (MGMT only)"}
+  - {rule: allow, port: "9200", proto: tcp, src: "10.0.40.0/24", comment: "OpenSearch (intra-SECURITY)"}
+  - {rule: allow, port: "443", proto: tcp, src: "10.0.10.0/24", comment: "Wazuh dashboard (MGMT only)"}

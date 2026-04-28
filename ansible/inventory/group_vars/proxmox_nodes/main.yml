@@ -1,0 +1,10 @@
+---
+# ansible/inventory/group_vars/proxmox_nodes/main.yml
+# Overrides for Proxmox nodes — SSH as root, home dir is /root
+
+common_admin_user: root
+
+# Proxmox manages its own firewall via pve-firewall (cluster.fw).
+# UFW conflicts with pve-firewall's iptables chains and blocks port 8006,
+# VNC/SPICE consoles, and Corosync cluster traffic if enabled here.
+common_manage_ufw: false

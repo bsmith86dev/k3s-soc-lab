@@ -94,7 +94,7 @@ proxmox_lxc_containers:
     description: "Proxmox Backup Server — stores backups on TrueNAS NFS"
     netif:
       net0: "name=eth0,bridge=vmbr0,tag=20,ip=10.0.20.30/24,gw=10.0.20.1"
-    nameservers: "10.0.20.1"
+    nameservers: "10.0.10.1"
     searchdomain: "lab.blerdmh.local"
     onboot: true
     unprivileged: false    # PBS requires privileged for backup operations
@@ -133,7 +133,7 @@ proxmox_vms:
     vlan: 40
     ip: "10.0.40.10"
     gateway: "10.0.40.1"
-    dns: "10.0.40.1"
+    dns: "10.0.10.1"
     description: "Wazuh Manager + Dashboard + OpenSearch"
     tags: ["security", "wazuh", "siem"]
     onboot: true
@@ -147,7 +147,7 @@ proxmox_vms:
     vlan: 40
     ip: "10.0.40.11"
     gateway: "10.0.40.1"
-    dns: "10.0.40.1"
+    dns: "10.0.10.1"
     description: "Suricata IDS + Zeek NSM"
     tags: ["security", "ids", "zeek", "suricata"]
     onboot: true
@@ -161,7 +161,7 @@ proxmox_vms:
     vlan: 40
     ip: "10.0.40.12"
     gateway: "10.0.40.1"
-    dns: "10.0.40.1"
+    dns: "10.0.10.1"
     description: "OpenVAS / Greenbone vulnerability scanner"
     tags: ["security", "vuln-scan"]
     onboot: true
@@ -175,7 +175,7 @@ proxmox_vms:
     vlan: 40
     ip: "10.0.40.13"
     gateway: "10.0.40.1"
-    dns: "10.0.40.1"
+    dns: "10.0.10.1"
     description: "Grafana + Prometheus observability"
     tags: ["security", "observability"]
     onboot: true
@@ -193,7 +193,7 @@ proxmox_vms:
     mac: "{{ vault_k3s_w2_amd_mac }}"
     ip: "10.0.20.12"
     gateway: "10.0.20.1"
-    dns: "10.0.20.1"
+    dns: "10.0.10.1"
     description: "k3s worker VM with AMD RX 5700 XT PCIe passthrough — Jellyfin VAAPI"
     tags: ["k3s", "worker", "gpu"]
     onboot: true
@@ -208,7 +208,7 @@ proxmox_vms:
     mac: "{{ vault_k3s_w3_n1_mac }}"
     ip: "10.0.20.13"
     gateway: "10.0.20.1"
-    dns: "10.0.20.1"
+    dns: "10.0.10.1"
     description: "k3s worker VM on N1 Mini — media/personal workloads"
     tags: ["k3s", "worker"]
     onboot: true
@@ -223,7 +223,7 @@ proxmox_vms:
     vlan: 61
     ip: "10.0.61.10"
     gateway: "10.0.61.1"
-    dns: "10.0.61.1"
+    dns: "10.0.10.1"
     description: "Kali Linux — red team operator box"
     tags: ["redteam", "kali"]
     onboot: false
@@ -238,7 +238,7 @@ proxmox_vms:
     vlan: 62
     ip: "10.0.62.10"
     gateway: "10.0.62.1"
-    dns: "10.0.62.1"
+    dns: "10.0.10.1"
     description: "Windows Server 2022 — AD domain controller / target"
     tags: ["purple", "windows", "ad"]
     onboot: false
@@ -252,7 +252,7 @@ proxmox_vms:
     vlan: 62
     ip: "10.0.62.11"
     gateway: "10.0.62.1"
-    dns: "10.0.62.1"
+    dns: "10.0.10.1"
     description: "Windows 11 — AD-joined workstation target"
     tags: ["purple", "windows"]
     onboot: false

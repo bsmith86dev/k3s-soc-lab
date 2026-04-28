@@ -3,9 +3,11 @@
 # Triggered by notify: in common tasks
 # These run once at the end of a play, even if notified multiple times
 
+# Service is `ssh.service` on both Debian 12 (Proxmox) and Ubuntu 24.04
+# cloud images. `sshd` only resolves on RHEL-family distros.
 - name: Restart sshd
   ansible.builtin.service:
-    name: sshd
+    name: ssh
     state: restarted
   listen: "restart sshd"
 
@@ -20,6 +22,18 @@
     cmd: ufw reload
   changed_when: false
   listen: "reload ufw"
+
+- name: Restart chrony
+  ansible.builtin.service:
+    name: chrony
+    state: restarted
+  listen: "restart chrony"
+
+- name: Restart rsyslog
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted
+  listen: "restart rsyslog"
 
 - name: Restart unattended-upgrades
   ansible.builtin.service:

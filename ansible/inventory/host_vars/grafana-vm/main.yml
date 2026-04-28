@@ -1,0 +1,7 @@
+---
+# ansible/inventory/host_vars/grafana-vm/main.yml
+# Grafana visualization — pulls from Wazuh OpenSearch.
+
+common_ufw_extra_rules:
+  - {rule: allow, port: "3000", proto: tcp, src: "10.0.10.0/24", comment: "Grafana web UI (MGMT only)"}
+  - {rule: allow, port: "3000", proto: tcp, src: "10.0.20.0/24", comment: "Grafana web UI (SERVERS — internal users)"}

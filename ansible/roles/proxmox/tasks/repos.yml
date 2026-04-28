@@ -42,13 +42,26 @@
     - repos
 
 # 🔥 SAFE version (no more OOM / killed process issues)
+# Properly disables the subscription check by wrapping it in a false condition
 - name: Disable subscription nag (safe patch)
-  ansible.builtin.lineinfile:
-    path: /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
-    regexp: "data.status !== 'Active'"
-    line: "false"
-    backup: true
-  notify: restart pveproxy
+  ansible.builtin.shell:
+    cmd: |
+      # Check if already patched
+      if grep -q "false && data.status" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js; then
+        echo "Already patched"
+        exit 0
+      fi
+
+      # Backup before patching
+      cp /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js.bak
+
+      # Replace the subscription check with a disabled condition
+      sed -i "s/data.status !== 'Active'/false \&\& data.status !== 'Active'/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+
+      echo "Patched successfully"
+  register: proxmox_nag_patch
+  changed_when: "'already patched' not in proxmox_nag_patch.stdout"
   failed_when: false
+  notify: restart pveproxy
   tags:
     - proxmox

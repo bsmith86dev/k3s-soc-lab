@@ -5,7 +5,7 @@
 
 - name: Ensure .ssh directory exists for admin user
   ansible.builtin.file:
-    path: "/home/{{ common_admin_user }}/.ssh"
+    path: "{{ ansible_user_dir }}/.ssh"
     state: directory
     owner: "{{ common_admin_user }}"
     group: "{{ common_admin_user }}"

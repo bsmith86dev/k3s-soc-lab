@@ -6,8 +6,8 @@ gitea_arch: "arm64"  # LXC on N1 Mini is x86_64 — override if needed; arm64 fo
 
 gitea_http_port: 3000
 gitea_admin_user: "techinb"
-gitea_admin_email: "admin@lab.blerdmh.local"
-gitea_github_user: "techinb"   # Your GitHub username
+gitea_admin_email: "techinb@icloud.com"
+gitea_github_user: "bsmith86dev"   # Your GitHub username
 
 # How often Gitea pulls from GitHub
 # Format: Xh (hours), Xm (minutes)

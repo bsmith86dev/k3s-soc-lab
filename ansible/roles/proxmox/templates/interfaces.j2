@@ -6,13 +6,22 @@
 auto lo
 iface lo inet loopback
 
-# Physical NIC — no IP, just a bridge member
+# Physical NIC — trunk member port, no IP.
+# bridge-pvids 10 sets PVID=10 on this uplink port so untagged frames
+# arriving from the switch trunk (native VLAN 10) are classified into
+# VLAN 10 by the bridge instead of defaulting to VLAN 1.
 auto {{ proxmox_nic }}
 iface {{ proxmox_nic }} inet manual
+    bridge-pvids 10
 
 # vmbr0 — VLAN-aware bridge
-# VMs set their VLAN tag in the VM hardware config
-# Proxmox handles the 802.1Q tagging transparently
+# VMs/LXCs set their VLAN tag in the hardware config; 802.1Q tagging
+# is handled transparently by the bridge.
+#
+# bridge-pvids 10: marks the CPU port (vmbr0) native VLAN as 10 so:
+#   • Management traffic from Proxmox egresses untagged as VLAN 10
+#   • VLAN 10 frames from the switch arrive untagged at the CPU port
+#   • 'bridge vlan show dev vmbr0' reports: 10 PVID Egress Untagged
 auto vmbr0
 iface vmbr0 inet static
     address {{ proxmox_mgmt_ip }}/24
@@ -22,10 +31,7 @@ iface vmbr0 inet static
     bridge-fd 0
     bridge-vlan-aware yes
     bridge-vids 2-4094
-    # VLAN 10 = native/untagged for Proxmox management traffic
-    # Switch trunk sends VLAN 10 untagged (PVID=10) so management IP
-    # lives on the base bridge. VM VLAN tags (20/40/61/etc.) are handled
-    # transparently by vlan-aware bridging.
+    bridge-pvids 10
 
 {% if proxmox_role == 'primary' %}
 # AMDPVE only — Ceph public network (VLAN 30)

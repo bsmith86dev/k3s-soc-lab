@@ -28,6 +28,10 @@ common_fail2ban_maxretry: 3
 
 # ── Packages ──────────────────────────────────────────────────────────────
 
+# Set false on appliances (TrueNAS) where apt is blocked at the OS level.
+# Skips packages, ufw, fail2ban, upgrades, ntp, and logging task files.
+common_manage_packages: true
+
 common_packages:
   # Network tools
   - curl
@@ -76,6 +80,9 @@ common_packages_remove:
 #     - {rule: allow, port: "8006", proto: tcp, src: "10.0.10.0/24", comment: "Proxmox web UI" }
 
 common_ufw_extra_rules: []
+
+# Set false on hosts that manage their own firewall (e.g. Proxmox nodes use pve-firewall)
+common_manage_ufw: true
 
 # ── Disabled services ─────────────────────────────────────────────────────
 

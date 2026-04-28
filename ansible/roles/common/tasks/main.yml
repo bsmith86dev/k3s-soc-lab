@@ -3,7 +3,9 @@
 # Baseline configuration applied to ALL Linux hosts in the lab
 # Runs first in every play — establishes a consistent, hardened foundation
 #
-# Hosts covered: k3s-cp, k3s-w1, AMDPVE, N1 Mini, TrueNAS (limited)
+# Hosts covered: k3s-cp, k3s-w2-amd, k3s-w3-n1, AMDPVE, N1 Mini,
+#                wazuh-vm, ids-vm, openvas-vm, grafana-vm, kali-red,
+#                TrueNAS (limited — apt is skipped at the OS level)
 # Run order matters — do not reorder imports
 
 - name: Configure system settings
@@ -13,6 +15,7 @@
 - name: Install baseline packages
   ansible.builtin.import_tasks: packages.yml
   tags: [common, packages]
+  when: common_manage_packages | default(true)
 
 - name: Configure SSH hardening
   ansible.builtin.import_tasks: ssh.yml
@@ -21,19 +24,24 @@
 - name: Configure UFW firewall
   ansible.builtin.import_tasks: ufw.yml
   tags: [common, ufw]
+  when: common_manage_packages | default(true) and common_manage_ufw | default(true)
 
 - name: Configure fail2ban
   ansible.builtin.import_tasks: fail2ban.yml
   tags: [common, fail2ban]
+  when: common_manage_packages | default(true)
 
 - name: Configure unattended upgrades
   ansible.builtin.import_tasks: upgrades.yml
   tags: [common, upgrades]
+  when: common_manage_packages | default(true)
 
 - name: Configure NTP / time sync
   ansible.builtin.import_tasks: ntp.yml
   tags: [common, ntp]
+  when: common_manage_packages | default(true)
 
 - name: Configure system logging
   ansible.builtin.import_tasks: logging.yml
   tags: [common, logging]
+  when: common_manage_packages | default(true)

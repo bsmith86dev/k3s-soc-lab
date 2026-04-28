@@ -1,0 +1,8 @@
+---
+# ansible/inventory/host_vars/ids-vm/main.yml
+# Suricata + Zeek IDS — sniff interface receives mirrored traffic
+# (no listening ports needed there). Management interface accepts SSH
+# from MGMT and ships logs to Wazuh.
+
+common_ufw_extra_rules:
+  - {rule: allow, port: "9200", proto: tcp, src: "10.0.40.0/24", comment: "OpenSearch lookup against Wazuh"}

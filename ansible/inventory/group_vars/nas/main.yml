@@ -1,0 +1,12 @@
+---
+# ansible/inventory/group_vars/nas/main.yml
+# TrueNAS Scale — admin user has sudo with password (not NOPASSWD)
+
+ansible_become_password: "{{ vault_truenas_become_password }}"
+
+# TrueNAS blocks apt at the OS level — skip all package management tasks
+common_manage_packages: false
+
+# TrueNAS admin user — `techinb` (the lab default) doesn't exist here,
+# so ssh.yml's chown of ~/.ssh would fail without this override.
+common_admin_user: truenas_admin

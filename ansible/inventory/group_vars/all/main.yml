@@ -1,2 +1,8 @@
 ---
 proxmox_mgmt_gw: 10.0.10.1
+
+# Default SSH login + become password for all cloud-init VM hosts (techinb user).
+# LXC containers override ansible_password via group_vars/lxc_containers.
+# Proxmox nodes use key-only auth (password is set but never tried when key succeeds).
+ansible_password: "{{ vault_vm_cipassword }}"
+ansible_become_password: "{{ vault_vm_cipassword }}"

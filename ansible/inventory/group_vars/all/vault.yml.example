@@ -49,6 +49,14 @@ vault_gitea_secret_key: "CHANGEME"
 # System → API Keys
 vault_truenas_api_key: "CHANGEME"
 
+# TrueNAS admin sudo password (used by Ansible become)
+# Credentials → Users → truenas_admin → set password
+vault_truenas_become_password: "CHANGEME"
+
+# Cloud-init password for techinb user on all provisioned VMs/LXCs
+# Set during cloud-init template setup in Proxmox
+vault_vm_cipassword: "CHANGEME"
+
 # Wazuh credentials
 vault_wazuh_enrollment_password: "CHANGEME"   # Agents use this to self-enroll
 vault_wazuh_api_password: "CHANGEME"          # Wazuh REST API password
