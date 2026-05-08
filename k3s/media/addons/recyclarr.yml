@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: recyclarr-config-pvc
+  namespace: media
+  labels:
+    app.kubernetes.io/name: recyclarr
+    app.kubernetes.io/part-of: arr-stack
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recyclarr-config
+  namespace: media
+  labels:
+    app.kubernetes.io/name: recyclarr
+    app.kubernetes.io/part-of: arr-stack
+data:
+  recyclarr.yml: |
+    radarr:
+      radarr-main:
+        base_url: http://radarr:7878
+        api_key: !env_var RADARR_API_KEY
+        delete_old_custom_formats: true
+        replace_existing_custom_formats: true
+        quality_profiles:
+          - name: HD-1080p
+          - name: UHD-2160p
+        custom_formats:
+          - trash_ids:
+              # Replace/expand with your chosen TRaSH IDs.
+              - ed38b889b31be83fda192888e2286d83 # BR-DISK
+              - 90cedc1fea7ea5d11298bebd3d1d3223 # EVO except WEB-DL
+            assign_scores_to:
+              - name: HD-1080p
+              - name: UHD-2160p
+
+    sonarr:
+      sonarr-main:
+        base_url: http://sonarr:8989
+        api_key: !env_var SONARR_API_KEY
+        delete_old_custom_formats: true
+        replace_existing_custom_formats: true
+        quality_profiles:
+          - name: HD-1080p
+          - name: UHD-2160p
+        custom_formats:
+          - trash_ids:
+              # Replace/expand with your chosen Sonarr TRaSH IDs.
+              - 32b367365729d530ca1c124a0b180c64 # Bad Dual Groups
+            assign_scores_to:
+              - name: HD-1080p
+              - name: UHD-2160p
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: recyclarr
+  namespace: media
+  labels:
+    app.kubernetes.io/name: recyclarr
+    app.kubernetes.io/part-of: arr-stack
+spec:
+  schedule: "17 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: recyclarr
+            app.kubernetes.io/part-of: arr-stack
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+          containers:
+            - name: recyclarr
+              image: ghcr.io/recyclarr/recyclarr:latest
+              imagePullPolicy: IfNotPresent
+              args:
+                - sync
+                - --config
+                - /config/recyclarr.yml
+              env:
+                - name: TZ
+                  value: America/Chicago
+                - name: RADARR_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: arr-api-keys
+                      key: RADARR_API_KEY
+                - name: SONARR_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: arr-api-keys
+                      key: SONARR_API_KEY
+              volumeMounts:
+                - name: recyclarr-config-persistent
+                  mountPath: /config
+                - name: recyclarr-config-template
+                  mountPath: /config/recyclarr.yml
+                  subPath: recyclarr.yml
+                  readOnly: true
+          volumes:
+            - name: recyclarr-config-persistent
+              persistentVolumeClaim:
+                claimName: recyclarr-config-pvc
+            - name: recyclarr-config-template
+              configMap:
+                name: recyclarr-config
