@@ -1,0 +1,294 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homepage-config-pvc
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/part-of: dashboards
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homepage-bootstrap-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/part-of: dashboards
+data:
+  kubernetes.yaml: |
+    mode: cluster
+  settings.yaml: |
+    title: BlerdMH Lab
+    description: Home lab command center
+    theme: dark
+    color: slate
+    layout:
+      Media Automation:
+        style: row
+        columns: 4
+      Media Monitoring:
+        style: row
+        columns: 4
+      Dashboards:
+        style: row
+        columns: 4
+  services.yaml: |
+    - Media Automation:
+        - Radarr:
+            icon: radarr.png
+            href: http://radarr.lab.blerdmh.local
+            description: Movie automation
+            app: radarr
+            namespace: media
+        - Sonarr:
+            icon: sonarr.png
+            href: http://sonarr.lab.blerdmh.local
+            description: TV automation
+            app: sonarr
+            namespace: media
+        - Prowlarr:
+            icon: prowlarr.png
+            href: http://prowlarr.lab.blerdmh.local
+            description: Indexer management
+            app: prowlarr
+            namespace: media
+        - Notifiarr:
+            icon: notifiarr.png
+            href: http://notifiarr.lab.blerdmh.local
+            description: Notifications and TRaSH sync helper
+            app: notifiarr
+            namespace: media
+    - Media Monitoring:
+        - Jellyfin:
+            icon: jellyfin.png
+            href: http://jellyfin.lab.blerdmh.local
+            description: Media streaming
+            app: jellyfin
+            namespace: media
+        - Tautulli:
+            icon: tautulli.png
+            href: http://tautulli.lab.blerdmh.local
+            description: Media usage analytics
+            app: tautulli
+            namespace: media
+    - Dashboards:
+        - Homarr:
+            icon: homarr.png
+            href: http://homarr.lab.blerdmh.local
+            description: Homelab dashboard
+            app: homarr
+            namespace: monitoring
+        - Homepage:
+            icon: homepage.png
+            href: http://homepage.lab.blerdmh.local
+            description: Kubernetes-aware dashboard
+            app: homepage
+            namespace: monitoring
+  widgets.yaml: |
+    - resources:
+        cpu: true
+        memory: true
+        disk: /
+    - search:
+        provider: duckduckgo
+        target: _blank
+  bookmarks.yaml: |
+    - Lab:
+        - GitHub Repo:
+            - href: https://github.com/bsmith86dev/k3s-soc-lab
+              icon: github.png
+        - Cloudflare Zero Trust:
+            - href: https://one.dash.cloudflare.com
+              icon: cloudflare.png
+  custom.css: ""
+  custom.js: ""
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: homepage
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: homepage
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: homepage-readonly
+  labels:
+    app.kubernetes.io/name: homepage
+rules:
+  - apiGroups: [""]
+    resources:
+      - configmaps
+      - endpoints
+      - namespaces
+      - nodes
+      - persistentvolumeclaims
+      - persistentvolumes
+      - pods
+      - services
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+      - deployments
+      - replicasets
+      - statefulsets
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - pods
+      - nodes
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: homepage-readonly
+  labels:
+    app.kubernetes.io/name: homepage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: homepage-readonly
+subjects:
+  - kind: ServiceAccount
+    name: homepage
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homepage
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/part-of: dashboards
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: homepage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: homepage
+        app.kubernetes.io/part-of: dashboards
+    spec:
+      serviceAccountName: homepage
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: seed-config
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mkdir -p /app/config
+              for file in kubernetes.yaml settings.yaml services.yaml widgets.yaml bookmarks.yaml custom.css custom.js; do
+                if [ ! -f "/app/config/${file}" ]; then
+                  cp "/bootstrap/${file}" "/app/config/${file}"
+                fi
+              done
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+            - name: bootstrap
+              mountPath: /bootstrap
+      containers:
+        - name: homepage
+          image: ghcr.io/gethomepage/homepage:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: TZ
+              value: America/Chicago
+            - name: HOMEPAGE_ALLOWED_HOSTS
+              value: homepage.lab.blerdmh.local,homepage.blerdmh.com,localhost:3000,127.0.0.1:3000
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: homepage-config-pvc
+        - name: bootstrap
+          configMap:
+            name: homepage-bootstrap-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: homepage
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: homepage
+    app.kubernetes.io/part-of: dashboards
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: homepage
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homepage
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    gethomepage.dev/enabled: "true"
+    gethomepage.dev/name: Homepage
+    gethomepage.dev/group: Dashboards
+    gethomepage.dev/icon: homepage.png
+    gethomepage.dev/description: Kubernetes-aware start page
+spec:
+  rules:
+    - host: homepage.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homepage
+                port:
+                  number: 3000
