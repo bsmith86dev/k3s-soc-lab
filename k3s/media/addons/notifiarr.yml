@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notifiarr-config-pvc
+  namespace: media
+  labels:
+    app.kubernetes.io/name: notifiarr
+    app.kubernetes.io/part-of: arr-stack
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-client
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notifiarr
+  namespace: media
+  labels:
+    app.kubernetes.io/name: notifiarr
+    app.kubernetes.io/part-of: arr-stack
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: notifiarr
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: notifiarr
+        app.kubernetes.io/part-of: arr-stack
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: notifiarr
+          image: golift/notifiarr:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5454
+          env:
+            - name: TZ
+              value: America/Chicago
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: utmp
+              mountPath: /var/run/utmp
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: notifiarr-config-pvc
+        - name: utmp
+          hostPath:
+            path: /var/run/utmp
+            type: FileOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifiarr
+  namespace: media
+  labels:
+    app.kubernetes.io/name: notifiarr
+    app.kubernetes.io/part-of: arr-stack
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: notifiarr
+  ports:
+    - name: http
+      port: 5454
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: notifiarr
+  namespace: media
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    gethomepage.dev/enabled: "true"
+    gethomepage.dev/name: Notifiarr
+    gethomepage.dev/group: Media Automation
+    gethomepage.dev/icon: notifiarr.png
+    gethomepage.dev/description: Notifications and TRaSH sync helper
+spec:
+  rules:
+    - host: notifiarr.lab.blerdmh.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: notifiarr
+                port:
+                  number: 5454
